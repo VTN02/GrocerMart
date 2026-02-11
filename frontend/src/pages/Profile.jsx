@@ -33,7 +33,7 @@ export default function Profile() {
             try {
                 const username = localStorage.getItem('username');
                 // We use the profile endpoint which uses the Principal
-                const { data } = await api.get('/api/users/profile');
+                const { data } = await api.get('/users/profile');
                 if (data) {
                     setFormData(prev => ({
                         ...prev,
@@ -72,7 +72,7 @@ export default function Profile() {
 
         setLoading(true);
         try {
-            const { data } = await api.put('/api/users/profile', {
+            const { data } = await api.put('/users/profile', {
                 fullName: formData.fullName,
                 username: formData.username,
                 phone: formData.phone,

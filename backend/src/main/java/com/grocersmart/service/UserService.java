@@ -88,6 +88,12 @@ public class UserService {
                 .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + id));
     }
 
+    public UserDto getUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(this::mapToDto)
+                .orElseThrow(() -> new EntityNotFoundException("User not found with username: " + username));
+    }
+
     public UserDto updateUser(Long id, UserDto dto) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));

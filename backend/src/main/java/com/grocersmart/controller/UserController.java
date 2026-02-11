@@ -24,6 +24,12 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(created, "User created successfully"));
     }
 
+    @GetMapping("/profile")
+    public ResponseEntity<ApiResponse<UserDto>> getProfile(java.security.Principal principal) {
+        UserDto user = userService.getUserByUsername(principal.getName());
+        return ResponseEntity.ok(ApiResponse.success(user, "Profile retrieved successfully"));
+    }
+
     @PutMapping("/profile")
     public ResponseEntity<ApiResponse<UserDto>> updateProfile(
             @jakarta.validation.Valid @RequestBody com.grocersmart.dto.UpdateProfileRequest request,
