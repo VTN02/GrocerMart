@@ -9,6 +9,8 @@ import DataTable from '../components/DataTable';
 import FormDialog from '../components/FormDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import StatusChip from '../components/StatusChip';
+import DashboardCard from '../components/DashboardCard';
+import AnimatedContainer from '../components/AnimatedContainer';
 
 const initialFormData = {
     name: '',
@@ -274,7 +276,7 @@ export default function Products() {
     ];
 
     return (
-        <Box>
+        <AnimatedContainer delay={0.1}>
             <PageHeader
                 title="Products"
                 subtitle="Manage your product catalog and inventory"
@@ -309,82 +311,84 @@ export default function Products() {
                 }
             />
 
-            {/* Filter Bar */}
-            <Box mb={3} display="flex" gap={2} p={2} component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }} alignItems="center">
-                <TextField
-                    size="small"
-                    label="Filter by Category"
-                    placeholder="e.g. Rice, Grains"
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    sx={{ width: 200 }}
-                />
-                <TextField
-                    size="small"
-                    label="Search by Product ID"
-                    type="number"
-                    placeholder="Enter ID"
-                    value={searchId}
-                    onChange={(e) => setSearchId(e.target.value)}
-                    sx={{ width: 180 }}
-                />
+            <DashboardCard title="Product List" subtitle="Search, filter, and manage your inventory items">
+                {/* Filter Bar */}
+                <Box mb={3} display="flex" gap={2} flexWrap="wrap" alignItems="center">
+                    <TextField
+                        size="small"
+                        label="Filter by Category"
+                        placeholder="e.g. Rice, Grains"
+                        value={filterCategory}
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                        sx={{ width: 200 }}
+                    />
+                    <TextField
+                        size="small"
+                        label="Search by Product ID"
+                        type="number"
+                        placeholder="Enter ID"
+                        value={searchId}
+                        onChange={(e) => setSearchId(e.target.value)}
+                        sx={{ width: 180 }}
+                    />
 
-                <FormControlLabel
-                    control={
-                        <Switch
-                            checked={showArchived}
-                            onChange={(e) => setShowArchived(e.target.checked)}
-                            color="warning"
-                        />
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={showArchived}
+                                onChange={(e) => setShowArchived(e.target.checked)}
+                                color="warning"
+                            />
+                        }
+                        label="Show Archived"
+                    />
+
+                    {(filterCategory || searchId || showArchived) && (
+                        <Button
+                            color="inherit"
+                            onClick={() => { setFilterCategory(''); setSearchId(''); setShowArchived(false); }}
+                        >
+                            Clear Filters
+                        </Button>
+                    )}
+                </Box>
+
+                <DataTable
+                    columns={columns}
+                    data={products}
+                    searchKey="name"
+                    loading={loading}
+                    emptyTitle="No products found"
+                    emptyDescription="Start by adding your first product to the catalog."
+                    emptyAction={
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={() => handleOpenDialog()}
+                        >
+                            Add First Product
+                        </Button>
                     }
-                    label="Show Archived"
+                    actions={(row) => (
+                        <>
+                            <Tooltip title="Edit">
+                                <IconButton size="small" onClick={() => handleOpenDialog(row)}>
+                                    <Edit fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleOpenDeleteDialog(row.id)}
+                                >
+                                    <Delete fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
+                    )}
                 />
-
-                {(filterCategory || searchId || showArchived) && (
-                    <Button
-                        color="inherit"
-                        onClick={() => { setFilterCategory(''); setSearchId(''); setShowArchived(false); }}
-                    >
-                        Clear Filters
-                    </Button>
-                )}
-            </Box>
-
-            <DataTable
-                columns={columns}
-                data={products}
-                searchKey="name"
-                loading={loading}
-                emptyTitle="No products found"
-                emptyDescription="Start by adding your first product to the catalog."
-                emptyAction={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={() => handleOpenDialog()}
-                    >
-                        Add First Product
-                    </Button>
-                }
-                actions={(row) => (
-                    <>
-                        <Tooltip title="Edit">
-                            <IconButton size="small" onClick={() => handleOpenDialog(row)}>
-                                <Edit fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                            <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleOpenDeleteDialog(row.id)}
-                            >
-                                <Delete fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </>
-                )}
-            />
+            </DashboardCard>
 
             {/* Create/Edit Dialog */}
             <FormDialog
@@ -506,6 +510,6 @@ export default function Products() {
                 severity="error"
                 loading={submitting}
             />
-        </Box>
+        </AnimatedContainer>
     );
 }

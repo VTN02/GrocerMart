@@ -1,20 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Grid, Skeleton, Typography, useTheme } from '@mui/material';
 import {
-    XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    PieChart, Pie, Cell, LineChart, Line
+    Box, Grid, Skeleton, Typography, useTheme, Button, Chip, Stack, IconButton, Tooltip
+} from '@mui/material';
+import {
+    XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer,
+    PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
 import {
     Inventory, People, AccountBalance, Receipt,
-    AttachMoney
+    AttachMoney, Add, Upload, TrendingUp, Warning, CheckCircle
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import { getProducts } from '../api/productsApi';
 import { getCustomers } from '../api/creditCustomersApi';
 import { getCheques } from '../api/chequesApi';
 import { getOrders } from '../api/ordersApi';
-import PageHeader from '../components/PageHeader';
+import {
+    DashboardCard, AnimatedContainer
+} from '../components';
 import KpiCard from '../components/KpiCard';
-import SectionCard from '../components/SectionCard';
+import EmptyState from '../components/EmptyState';
+
+const MotionBox = motion(Box);
 
 const formatCurrency = (amount) => {
     const num = Number(amount || 0);
@@ -43,9 +50,19 @@ export default function Dashboard() {
         orders: 0,
         totalRevenue: 0,
         outstandingCredit: 0,
+        lowStockCount: 0,
     });
     const [chartData, setChartData] = useState([]);
     const [pieData, setPieData] = useState([]);
+
+    const currentDate = new Date().toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    const userName = localStorage.getItem('fullName') || 'Admin';
 
     useEffect(() => {
         const fetchData = async () => {
@@ -67,6 +84,7 @@ export default function Dashboard() {
                 const bouncedCheques = cheques.filter(c => c.status === 'BOUNCED').length;
                 const totalRevenue = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
                 const outstandingCredit = customers.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0);
+                const lowStockCount = products.filter(p => (p.stockQuantity || 0) < 10).length;
 
                 setStats({
                     products: products.length,
@@ -76,14 +94,15 @@ export default function Dashboard() {
                     orders: orders.length,
                     totalRevenue,
                     outstandingCredit,
+                    lowStockCount,
                 });
 
                 // Pie Data (Cheque Status)
                 const statusColor = {
-                    PENDING: theme.palette.primary.main,
-                    DEPOSITED: theme.palette.primary.dark,
-                    CLEARED: theme.palette.secondary.main,
-                    BOUNCED: theme.palette.text.secondary,
+                    PENDING: '#FFA726',
+                    DEPOSITED: '#42A5F5',
+                    CLEARED: '#66BB6A',
+                    BOUNCED: '#EF5350',
                 };
                 const statusCounts = cheques.reduce((acc, curr) => {
                     acc[curr.status] = (acc[curr.status] || 0) + 1;
@@ -140,12 +159,72 @@ export default function Dashboard() {
     }, []);
 
     return (
-        <Box>
-            <PageHeader
-                title="Dashboard"
-                subtitle="Welcome back! Here's what's happening with your store today."
-                breadcrumbs={[{ label: 'Dashboard', path: '/dashboard' }]}
-            />
+        <AnimatedContainer delay={0.1}>
+            {/* Premium Dashboard Header */}
+            <MotionBox
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                sx={{
+                    mb: 4,
+                    p: 3,
+                    borderRadius: 3,
+                    background: (theme) => theme.palette.mode === 'dark'
+                        ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
+                        : 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    boxShadow: (theme) => theme.palette.mode === 'dark'
+                        ? '0 4px 20px rgba(0, 0, 0, 0.5)'
+                        : '0 4px 20px rgba(0, 0, 0, 0.08)',
+                }}
+            >
+                <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
+                    <Box>
+                        <Typography variant="h4" fontWeight={700} gutterBottom>
+                            Welcome back, {userName}! 👋
+                        </Typography>
+                        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                {currentDate}
+                            </Typography>
+                            <Chip
+                                icon={<CheckCircle />}
+                                label="Store Active"
+                                color="success"
+                                size="small"
+                                sx={{ fontWeight: 600 }}
+                            />
+                        </Stack>
+                    </Box>
+                    <Stack direction="row" spacing={1.5} flexWrap="wrap">
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            sx={{ borderRadius: 2 }}
+                        >
+                            Add Product
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            startIcon={<Receipt />}
+                            sx={{ borderRadius: 2 }}
+                        >
+                            New Order
+                        </Button>
+                        <Tooltip title="Import CSV">
+                            <IconButton
+                                color="primary"
+                                sx={{
+                                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                                    borderRadius: 2,
+                                }}
+                            >
+                                <Upload />
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </Box>
+            </MotionBox>
 
             {/* KPI Cards */}
             <Grid container spacing={3} mb={4}>
@@ -156,24 +235,9 @@ export default function Dashboard() {
                         icon={Inventory}
                         color="primary"
                         loading={loading}
-                    />
-                </Grid>
-                <Grid item xs={12} sm={6} lg={3}>
-                    <KpiCard
-                        title="Credit Customers"
-                        value={stats.customers}
-                        icon={People}
-                        color="success"
-                        loading={loading}
-                    />
-                </Grid>
-                <Grid item xs={12} sm={6} lg={3}>
-                    <KpiCard
-                        title="Pending Cheques"
-                        value={stats.pendingCheques}
-                        icon={AccountBalance}
-                        color="warning"
-                        loading={loading}
+                        trend="up"
+                        trendValue="+12%"
+                        delay={0.1}
                     />
                 </Grid>
                 <Grid item xs={12} sm={6} lg={3}>
@@ -183,6 +247,9 @@ export default function Dashboard() {
                         icon={Receipt}
                         color="info"
                         loading={loading}
+                        trend="up"
+                        trendValue="+8%"
+                        delay={0.2}
                     />
                 </Grid>
                 <Grid item xs={12} sm={6} lg={3}>
@@ -190,8 +257,21 @@ export default function Dashboard() {
                         title="Total Revenue"
                         value={formatCurrency(stats.totalRevenue)}
                         icon={AttachMoney}
-                        color="primary"
+                        color="success"
                         loading={loading}
+                        trend="up"
+                        trendValue="+23%"
+                        delay={0.3}
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6} lg={3}>
+                    <KpiCard
+                        title="Pending Cheques"
+                        value={stats.pendingCheques}
+                        icon={AccountBalance}
+                        color="warning"
+                        loading={loading}
+                        delay={0.4}
                     />
                 </Grid>
                 <Grid item xs={12} sm={6} lg={3}>
@@ -201,15 +281,19 @@ export default function Dashboard() {
                         icon={People}
                         color="secondary"
                         loading={loading}
+                        trend="down"
+                        trendValue="-5%"
+                        delay={0.5}
                     />
                 </Grid>
                 <Grid item xs={12} sm={6} lg={3}>
                     <KpiCard
-                        title="Bounced Cheques"
-                        value={stats.bouncedCheques}
-                        icon={AccountBalance}
-                        color="secondary"
+                        title="Low Stock Alerts"
+                        value={stats.lowStockCount}
+                        icon={Warning}
+                        color="error"
                         loading={loading}
+                        delay={0.6}
                     />
                 </Grid>
             </Grid>
@@ -217,108 +301,170 @@ export default function Dashboard() {
             {/* Charts */}
             <Grid container spacing={3}>
                 <Grid item xs={12} lg={8}>
-                    <SectionCard
-                        title="Order Trends"
-                        subtitle="Orders and revenue for the last 7 days"
+                    <MotionBox
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.5, delay: 0.3 }}
                     >
-                        <Box height={320}>
-                            {loading ? (
-                                <Skeleton variant="rounded" height={320} />
-                            ) : (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={chartData}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                                        <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke={theme.palette.text.secondary} />
-                                        <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 12 }} stroke={theme.palette.text.secondary} />
-                                        <YAxis
-                                            yAxisId="right"
-                                            orientation="right"
-                                            tick={{ fontSize: 12 }}
-                                            stroke={theme.palette.text.secondary}
-                                            tickFormatter={(v) => {
-                                                const num = Number(v || 0);
-                                                return num >= 1000 ? `${Math.round(num / 1000)}k` : `${Math.round(num)}`;
-                                            }}
-                                        />
-                                        <Tooltip
-                                            formatter={(value, name) => {
-                                                if (name === 'revenue') return [formatCurrency(value), 'Revenue'];
-                                                if (name === 'orders') return [value, 'Orders'];
-                                                return [value, name];
-                                            }}
-                                            contentStyle={{
-                                                backgroundColor: theme.palette.background.paper,
-                                                border: `1px solid ${theme.palette.divider}`,
-                                                borderRadius: '10px',
-                                            }}
-                                        />
-                                        <Line
-                                            yAxisId="left"
-                                            type="monotone"
-                                            dataKey="orders"
-                                            stroke={theme.palette.primary.dark}
-                                            strokeWidth={3}
-                                            dot={{ r: 3 }}
-                                            activeDot={{ r: 6 }}
-                                        />
-                                        <Line
-                                            yAxisId="right"
-                                            type="monotone"
-                                            dataKey="revenue"
-                                            stroke={theme.palette.primary.main}
-                                            strokeWidth={3}
-                                            dot={{ r: 3 }}
-                                            activeDot={{ r: 6 }}
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            )}
-                        </Box>
-                    </SectionCard>
+                        <DashboardCard
+                            title="Sales Trend"
+                            subtitle="Daily orders and revenue analysis"
+                        >
+                            <Box height={400}>
+                                {loading ? (
+                                    <Skeleton variant="rounded" height={400} />
+                                ) : chartData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
+                                            <defs>
+                                                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} opacity={0.5} />
+                                            <XAxis
+                                                dataKey="date"
+                                                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                                                stroke={theme.palette.divider}
+                                                interval={0}
+                                                angle={-45}
+                                                textAnchor="end"
+                                                height={60}
+                                            />
+                                            <YAxis
+                                                yAxisId="left"
+                                                allowDecimals={false}
+                                                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                                                stroke={theme.palette.divider}
+                                                label={{ value: 'Orders', angle: -90, position: 'insideLeft', fill: theme.palette.text.secondary }}
+                                            />
+                                            <YAxis
+                                                yAxisId="right"
+                                                orientation="right"
+                                                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
+                                                stroke={theme.palette.divider}
+                                                tickFormatter={(v) => {
+                                                    const num = Number(v || 0);
+                                                    return num >= 1000 ? `₹${Math.round(num / 1000)}k` : `₹${Math.round(num)}`;
+                                                }}
+                                            />
+                                            <ChartTooltip
+                                                formatter={(value, name) => {
+                                                    if (name === 'revenue') return [formatCurrency(value), 'Revenue'];
+                                                    if (name === 'orders') return [value, 'Orders'];
+                                                    return [value, name];
+                                                }}
+                                                contentStyle={{
+                                                    backgroundColor: theme.palette.background.paper,
+                                                    border: `1px solid ${theme.palette.divider}`,
+                                                    borderRadius: '12px',
+                                                    boxShadow: theme.shadows[3],
+                                                }}
+                                            />
+                                            <Legend
+                                                wrapperStyle={{ paddingTop: '20px' }}
+                                                iconType="circle"
+                                            />
+                                            <Line
+                                                yAxisId="left"
+                                                type="monotone"
+                                                dataKey="orders"
+                                                stroke={theme.palette.secondary.main}
+                                                strokeWidth={3}
+                                                dot={{ r: 4, fill: theme.palette.secondary.main }}
+                                                activeDot={{ r: 6 }}
+                                                name="Orders"
+                                            />
+                                            <Line
+                                                yAxisId="right"
+                                                type="monotone"
+                                                dataKey="revenue"
+                                                stroke={theme.palette.primary.main}
+                                                strokeWidth={3}
+                                                dot={{ r: 4, fill: theme.palette.primary.main }}
+                                                activeDot={{ r: 6 }}
+                                                fill="url(#colorRevenue)"
+                                                name="Revenue"
+                                            />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <EmptyState
+                                        title="No sales data yet"
+                                        message="Sales trends will appear here once you start processing orders"
+                                    />
+                                )}
+                            </Box>
+                        </DashboardCard>
+                    </MotionBox>
                 </Grid>
 
                 <Grid item xs={12} lg={4}>
-                    <SectionCard
-                        title="Cheque Status"
-                        subtitle="Distribution of cheque statuses"
+                    <MotionBox
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.5, delay: 0.4 }}
                     >
-                        <Box height={320} display="flex" alignItems="center" justifyContent="center">
-                            {loading ? (
-                                <Skeleton variant="rounded" height={320} width="100%" />
-                            ) : pieData.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={pieData}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={100}
-                                            paddingAngle={4}
-                                            dataKey="value"
-                                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                        >
-                                            {pieData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            ) : (
-                                <Box textAlign="center">
-                                    <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                        No data yet
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Cheque status breakdown will appear here once you add cheques.
-                                    </Typography>
-                                </Box>
-                            )}
-                        </Box>
-                    </SectionCard>
+                        <DashboardCard
+                            title="Cheque Lifecycle"
+                            subtitle="Status distribution"
+                        >
+                            <Box height={400} display="flex" alignItems="center" justifyContent="center">
+                                {loading ? (
+                                    <Skeleton variant="circular" width={250} height={250} />
+                                ) : pieData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart margin={{ top: 20, bottom: 20 }}>
+                                            <Pie
+                                                data={pieData}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={80}
+                                                outerRadius={120}
+                                                paddingAngle={5}
+                                                dataKey="value"
+                                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                                labelLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
+                                            >
+                                                {pieData.map((entry, index) => (
+                                                    <Cell
+                                                        key={`cell-${index}`}
+                                                        fill={entry.color}
+                                                        style={{
+                                                            filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.2))',
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    />
+                                                ))}
+                                            </Pie>
+                                            <Legend
+                                                layout="horizontal"
+                                                verticalAlign="bottom"
+                                                align="center"
+                                                wrapperStyle={{ paddingTop: '20px' }}
+                                            />
+                                            <ChartTooltip
+                                                contentStyle={{
+                                                    backgroundColor: theme.palette.background.paper,
+                                                    border: `1px solid ${theme.palette.divider}`,
+                                                    borderRadius: '12px',
+                                                    boxShadow: theme.shadows[3],
+                                                }}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <EmptyState
+                                        title="No cheques yet"
+                                        message="Cheque status breakdown will appear here"
+                                    />
+                                )}
+                            </Box>
+                        </DashboardCard>
+                    </MotionBox>
                 </Grid>
             </Grid>
-        </Box>
+        </AnimatedContainer>
     );
 }

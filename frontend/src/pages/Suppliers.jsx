@@ -3,7 +3,7 @@ import { Box, Button, TextField, IconButton, Tooltip, Grid, Paper, FormControlLa
 import { Add, Delete, Edit } from '@mui/icons-material';
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../api/suppliersApi';
 import { toast } from 'react-toastify';
-import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip } from '../components';
+import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip, DashboardCard, AnimatedContainer } from '../components';
 
 const initialFormData = {
     name: '',
@@ -173,7 +173,7 @@ export default function Suppliers() {
     ];
 
     return (
-        <Box>
+        <AnimatedContainer delay={0.1}>
             <PageHeader
                 title="Suppliers"
                 subtitle="Manage vendors and suppliers"
@@ -189,78 +189,80 @@ export default function Suppliers() {
                 }
             />
 
-            {/* Filter Bar */}
-            <Box mb={3} display="flex" gap={2} p={2} component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                <TextField
-                    size="small"
-                    label="Search by Supplier ID"
-                    type="number"
-                    placeholder="Enter ID"
-                    value={searchId}
-                    onChange={(e) => setSearchId(e.target.value)}
-                    sx={{ width: 250 }}
-                />
-                {searchId && (
-                    <Button
-                        color="inherit"
-                        onClick={() => setSearchId('')}
-                    >
-                        Clear
-                    </Button>
-                )}
+            <DashboardCard title="Supplier List" subtitle="Manage your vendor relationships">
+                {/* Filter Bar */}
+                <Box mb={3} display="flex" gap={2} alignItems="center">
+                    <TextField
+                        size="small"
+                        label="Search by Supplier ID"
+                        type="number"
+                        placeholder="Enter ID"
+                        value={searchId}
+                        onChange={(e) => setSearchId(e.target.value)}
+                        sx={{ width: 250 }}
+                    />
+                    {searchId && (
+                        <Button
+                            color="inherit"
+                            onClick={() => setSearchId('')}
+                        >
+                            Clear
+                        </Button>
+                    )}
 
-                <Box flexGrow={1} />
+                    <Box flexGrow={1} />
 
-                <FormControlLabel
-                    control={
-                        <Switch
-                            checked={showArchived}
-                            onChange={(e) => setShowArchived(e.target.checked)}
-                            color="warning"
-                        />
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={showArchived}
+                                onChange={(e) => setShowArchived(e.target.checked)}
+                                color="warning"
+                            />
+                        }
+                        label="Show Inactive"
+                    />
+                </Box>
+
+                <DataTable
+                    columns={columns}
+                    data={suppliers}
+                    searchKey="name"
+                    loading={loading}
+                    emptyTitle="No suppliers found"
+                    emptyDescription="Start by adding your first supplier."
+                    emptyAction={
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={handleOpenDialog}
+                        >
+                            Add First Supplier
+                        </Button>
                     }
-                    label="Show Inactive"
+                    actions={(row) => (
+                        <>
+                            <Tooltip title="Edit">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenDialog(row)}
+                                >
+                                    <Edit fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleOpenDeleteDialog(row.id)}
+                                >
+                                    <Delete fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
+                    )}
                 />
-            </Box>
-
-            <DataTable
-                columns={columns}
-                data={suppliers}
-                searchKey="name"
-                loading={loading}
-                emptyTitle="No suppliers found"
-                emptyDescription="Start by adding your first supplier."
-                emptyAction={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={handleOpenDialog}
-                    >
-                        Add First Supplier
-                    </Button>
-                }
-                actions={(row) => (
-                    <>
-                        <Tooltip title="Edit">
-                            <IconButton
-                                size="small"
-                                onClick={() => handleOpenDialog(row)}
-                            >
-                                <Edit fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                            <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleOpenDeleteDialog(row.id)}
-                            >
-                                <Delete fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </>
-                )}
-            />
+            </DashboardCard>
 
             {/* Create Dialog */}
             <FormDialog
@@ -342,6 +344,6 @@ export default function Suppliers() {
                 severity="error"
                 loading={submitting}
             />
-        </Box>
+        </AnimatedContainer>
     );
 }

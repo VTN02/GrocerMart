@@ -4,7 +4,7 @@ import { Add, Delete, Visibility } from '@mui/icons-material';
 import { getOrders, createOrder, deleteOrder } from '../api/ordersApi';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip } from '../components';
+import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip, DashboardCard, AnimatedContainer } from '../components';
 
 const initialFormData = {
     invoiceNo: '',
@@ -130,7 +130,7 @@ export default function Orders() {
     ];
 
     return (
-        <Box>
+        <AnimatedContainer delay={0.1}>
             <PageHeader
                 title="Orders"
                 subtitle="Sales orders and invoicing"
@@ -146,70 +146,72 @@ export default function Orders() {
                 }
             />
 
-            {/* Filter Bar */}
-            <Box mb={3} display="flex" gap={2} p={2} component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                <TextField
-                    size="small"
-                    label="Search by Order ID"
-                    type="number"
-                    placeholder="Enter ID"
-                    value={searchId}
-                    onChange={(e) => setSearchId(e.target.value)}
-                    sx={{ width: 250 }}
-                />
-                {searchId && (
-                    <Button
-                        color="inherit"
-                        onClick={() => setSearchId('')}
-                    >
-                        Clear
-                    </Button>
-                )}
-            </Box>
+            <DashboardCard title="Order Management" subtitle="Create and manage customer orders">
+                {/* Filter Bar */}
+                <Box mb={3} display="flex" gap={2} alignItems="center">
+                    <TextField
+                        size="small"
+                        label="Search by Order ID"
+                        type="number"
+                        placeholder="Enter ID"
+                        value={searchId}
+                        onChange={(e) => setSearchId(e.target.value)}
+                        sx={{ width: 250 }}
+                    />
+                    {searchId && (
+                        <Button
+                            color="inherit"
+                            onClick={() => setSearchId('')}
+                        >
+                            Clear
+                        </Button>
+                    )}
+                </Box>
 
-            <DataTable
-                columns={columns}
-                data={orders}
-                searchKey="invoiceNo"
-                loading={loading}
-                emptyTitle="No orders found"
-                emptyDescription="Start by creating your first order."
-                emptyAction={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={handleOpenDialog}
-                    >
-                        Create First Order
-                    </Button>
-                }
-                actions={(row) => (
-                    <>
-                        <Tooltip title="View Details">
-                            <Button
-                                component={Link}
-                                to={`/orders/${row.id}/items`}
-                                startIcon={<Visibility />}
-                                size="small"
-                                variant="outlined"
-                            >
-                                Details
-                            </Button>
-                        </Tooltip>
-                        {row.status === 'DRAFT' && (
-                            <Tooltip title="Delete">
-                                <IconButton
+                <DataTable
+                    columns={columns}
+                    data={orders}
+                    searchKey="invoiceNo"
+                    loading={loading}
+                    emptyTitle="No orders found"
+                    emptyDescription="Start by creating your first order."
+                    emptyAction={
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={handleOpenDialog}
+                        >
+                            Create First Order
+                        </Button>
+                    }
+                    actions={(row) => (
+                        <>
+                            <Tooltip title="View Details">
+                                <Button
+                                    component={Link}
+                                    to={`/orders/${row.id}/items`}
+                                    startIcon={<Visibility />}
                                     size="small"
-                                    color="error"
-                                    onClick={() => handleOpenDeleteDialog(row.id)}
+                                    variant="outlined"
                                 >
-                                    <Delete fontSize="small" />
-                                </IconButton>
+                                    Details
+                                </Button>
                             </Tooltip>
-                        )}
-                    </>
-                )}
-            />
+                            {row.status === 'DRAFT' && (
+                                <Tooltip title="Delete">
+                                    <IconButton
+                                        size="small"
+                                        color="error"
+                                        onClick={() => handleOpenDeleteDialog(row.id)}
+                                    >
+                                        <Delete fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+                        </>
+                    )}
+                />
+            </DashboardCard>
 
             {/* Create Dialog */}
             <FormDialog
@@ -264,6 +266,6 @@ export default function Orders() {
                 severity="error"
                 loading={submitting}
             />
-        </Box>
+        </AnimatedContainer>
     );
 }

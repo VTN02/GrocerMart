@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, Divider, Box } from '@mui/material';
 
-export default function SectionCard({ title, subtitle, actions, children, sx, ...props }) {
+export default function SectionCard({ title, subtitle, actions, children, sx, contentSx, ...props }) {
     return (
         <Card
             sx={{
@@ -30,7 +30,7 @@ export default function SectionCard({ title, subtitle, actions, children, sx, ..
                     <Divider />
                 </>
             )}
-            <CardContent sx={{ flexGrow: 1, p: 3 }}>
+            <CardContent sx={{ flexGrow: 1, p: 3, ...contentSx }}>
                 {children}
             </CardContent>
         </Card>

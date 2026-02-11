@@ -5,7 +5,7 @@ import { getPOs, createPO } from '../api/purchaseOrdersApi';
 import { getSuppliers } from '../api/suppliersApi';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { PageHeader, DataTable, FormDialog, StatusChip } from '../components';
+import { PageHeader, DataTable, FormDialog, StatusChip, DashboardCard, AnimatedContainer } from '../components';
 
 export default function PurchaseOrders() {
     const [pos, setPos] = useState([]);
@@ -114,7 +114,7 @@ export default function PurchaseOrders() {
     ];
 
     return (
-        <Box>
+        <AnimatedContainer delay={0.1}>
             <PageHeader
                 title="Purchase Orders"
                 subtitle="Manage supplier purchase orders"
@@ -130,57 +130,59 @@ export default function PurchaseOrders() {
                 }
             />
 
-            {/* Filter Bar */}
-            <Box mb={3} display="flex" gap={2} p={2} component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                <TextField
-                    size="small"
-                    label="Search by PO ID"
-                    type="number"
-                    placeholder="Enter ID"
-                    value={searchId}
-                    onChange={(e) => setSearchId(e.target.value)}
-                    sx={{ width: 250 }}
-                />
-                {searchId && (
-                    <Button
-                        color="inherit"
-                        onClick={() => setSearchId('')}
-                    >
-                        Clear
-                    </Button>
-                )}
-            </Box>
-
-            <DataTable
-                columns={columns}
-                data={enrichedPos}
-                searchKey="supplierName"
-                loading={loading}
-                emptyTitle="No purchase orders found"
-                emptyDescription="Start by creating your first purchase order."
-                emptyAction={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={handleOpenDialog}
-                    >
-                        Create First PO
-                    </Button>
-                }
-                actions={(row) => (
-                    <Tooltip title="View Details">
+            <DashboardCard title="PO Management" subtitle="Create and track supplier orders">
+                {/* Filter Bar */}
+                <Box mb={3} display="flex" gap={2} alignItems="center">
+                    <TextField
+                        size="small"
+                        label="Search by PO ID"
+                        type="number"
+                        placeholder="Enter ID"
+                        value={searchId}
+                        onChange={(e) => setSearchId(e.target.value)}
+                        sx={{ width: 250 }}
+                    />
+                    {searchId && (
                         <Button
-                            component={Link}
-                            to={`/purchase-orders/${row.id}/items`}
-                            startIcon={<Visibility />}
-                            size="small"
-                            variant="outlined"
+                            color="inherit"
+                            onClick={() => setSearchId('')}
                         >
-                            Details
+                            Clear
                         </Button>
-                    </Tooltip>
-                )}
-            />
+                    )}
+                </Box>
+
+                <DataTable
+                    columns={columns}
+                    data={enrichedPos}
+                    searchKey="supplierName"
+                    loading={loading}
+                    emptyTitle="No purchase orders found"
+                    emptyDescription="Start by creating your first purchase order."
+                    emptyAction={
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={handleOpenDialog}
+                        >
+                            Create First PO
+                        </Button>
+                    }
+                    actions={(row) => (
+                        <Tooltip title="View Details">
+                            <Button
+                                component={Link}
+                                to={`/purchase-orders/${row.id}/items`}
+                                startIcon={<Visibility />}
+                                size="small"
+                                variant="outlined"
+                            >
+                                Details
+                            </Button>
+                        </Tooltip>
+                    )}
+                />
+            </DashboardCard>
 
             {/* Create Dialog */}
             <FormDialog
@@ -211,6 +213,6 @@ export default function PurchaseOrders() {
                     ))}
                 </TextField>
             </FormDialog>
-        </Box>
+        </AnimatedContainer>
     );
 }

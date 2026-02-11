@@ -4,7 +4,7 @@ import { SwapHoriz, Inventory } from '@mui/icons-material';
 import { getProducts } from '../api/productsApi';
 import { convertStock } from '../api/inventoryApi';
 import { toast } from 'react-toastify';
-import { PageHeader, SectionCard } from '../components';
+import { PageHeader, DashboardCard, AnimatedContainer } from '../components';
 
 export default function InventoryConvert() {
     const [products, setProducts] = useState([]);
@@ -52,7 +52,7 @@ export default function InventoryConvert() {
     };
 
     return (
-        <Box>
+        <AnimatedContainer delay={0.1}>
             <PageHeader
                 title="Stock Conversion"
                 subtitle="Convert bulk items to individual units"
@@ -60,10 +60,9 @@ export default function InventoryConvert() {
             />
 
             <Box maxWidth="md" mx="auto">
-                <SectionCard
+                <DashboardCard
                     title="Conversion Form"
                     subtitle="Select a product and specify conversion quantities"
-                    icon={<SwapHoriz />}
                 >
                     <Box component="form" onSubmit={handleSubmit}>
                         <Grid container spacing={3}>
@@ -160,7 +159,7 @@ export default function InventoryConvert() {
                             </Grid>
                         </Grid>
                     </Box>
-                </SectionCard>
+                </DashboardCard>
 
                 <Box mt={3}>
                     <Alert severity="warning">
@@ -170,6 +169,6 @@ export default function InventoryConvert() {
                     </Alert>
                 </Box>
             </Box>
-        </Box>
+        </AnimatedContainer>
     );
 }

@@ -3,7 +3,7 @@ import { Box, Button, TextField, MenuItem, IconButton, Tooltip, Grid, Paper, Swi
 import { Add, Delete, Edit, Person } from '@mui/icons-material';
 import { getUsers, createUser, updateUser, deleteUser, activateUser, deactivateUser } from '../api/usersApi';
 import { toast } from 'react-toastify';
-import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip } from '../components';
+import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip, DashboardCard, AnimatedContainer } from '../components';
 
 const initialFormData = {
     fullName: '',
@@ -183,7 +183,7 @@ export default function Users() {
     ];
 
     return (
-        <Box>
+        <AnimatedContainer delay={0.1}>
             <PageHeader
                 title="Users"
                 subtitle="Manage system users and staff accounts"
@@ -200,63 +200,65 @@ export default function Users() {
                 }
             />
 
-            {/* Filter Bar */}
-            <Box mb={3} display="flex" gap={2} p={2} component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                <TextField
-                    size="small"
-                    label="Search by User ID"
-                    type="number"
-                    placeholder="Enter ID"
-                    value={searchId}
-                    onChange={(e) => setSearchId(e.target.value)}
-                    sx={{ width: 250 }}
-                />
-                {searchId && (
-                    <Button
-                        color="inherit"
-                        onClick={() => setSearchId('')}
-                    >
-                        Clear
-                    </Button>
-                )}
-            </Box>
+            <DashboardCard title="User Directory" subtitle="View and manage administrative and staff access">
+                {/* Filter Bar */}
+                <Box mb={3} display="flex" gap={2} alignItems="center">
+                    <TextField
+                        size="small"
+                        label="Search by User ID"
+                        type="number"
+                        placeholder="Enter ID"
+                        value={searchId}
+                        onChange={(e) => setSearchId(e.target.value)}
+                        sx={{ width: 250 }}
+                    />
+                    {searchId && (
+                        <Button
+                            color="inherit"
+                            onClick={() => setSearchId('')}
+                        >
+                            Clear
+                        </Button>
+                    )}
+                </Box>
 
-            <DataTable
-                columns={columns}
-                data={users}
-                searchKey="fullName"
-                loading={loading}
-                emptyTitle="No users found"
-                emptyDescription="Start by adding your first user account."
-                emptyAction={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={() => handleOpenDialog()}
-                    >
-                        Add First User
-                    </Button>
-                }
-                actions={(row) => (
-                    <>
-                        <Tooltip title="Edit">
-                            <IconButton size="small" onClick={() => handleOpenDialog(row)} disabled={!isAdmin}>
-                                <Edit fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                            <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleOpenDeleteDialog(row.id)}
-                                disabled={!isAdmin}
-                            >
-                                <Delete fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </>
-                )}
-            />
+                <DataTable
+                    columns={columns}
+                    data={users}
+                    searchKey="fullName"
+                    loading={loading}
+                    emptyTitle="No users found"
+                    emptyDescription="Start by adding your first user account."
+                    emptyAction={
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={() => handleOpenDialog()}
+                        >
+                            Add First User
+                        </Button>
+                    }
+                    actions={(row) => (
+                        <>
+                            <Tooltip title="Edit">
+                                <IconButton size="small" onClick={() => handleOpenDialog(row)} disabled={!isAdmin}>
+                                    <Edit fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleOpenDeleteDialog(row.id)}
+                                    disabled={!isAdmin}
+                                >
+                                    <Delete fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
+                    )}
+                />
+            </DashboardCard>
 
             {/* Create/Edit Dialog */}
             <FormDialog
@@ -339,6 +341,6 @@ export default function Users() {
                 severity="error"
                 loading={submitting}
             />
-        </Box>
+        </AnimatedContainer>
     );
 }

@@ -7,3 +7,5 @@ export { default as SectionCard } from './SectionCard';
 export { default as EmptyState } from './EmptyState';
 export { default as FormDialog } from './FormDialog';
 export { default as ConfirmDialog } from './ConfirmDialog';
+export { default as DashboardCard } from './DashboardCard';
+export { default as AnimatedContainer } from './AnimatedContainer';

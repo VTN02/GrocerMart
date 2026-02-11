@@ -4,7 +4,7 @@ import { Add, Delete, Edit, AccountBalance } from '@mui/icons-material';
 import { getCheques, createCheque, updateCheque, updateChequeStatus, deleteCheque } from '../api/chequesApi';
 import { getCustomers } from '../api/creditCustomersApi';
 import { toast } from 'react-toastify';
-import { PageHeader, DataTable, FormDialog, ConfirmDialog } from '../components';
+import { PageHeader, DataTable, FormDialog, ConfirmDialog, DashboardCard, AnimatedContainer } from '../components';
 
 const initialFormData = {
     chequeNumber: '',
@@ -177,7 +177,7 @@ export default function Cheques() {
     ];
 
     return (
-        <Box>
+        <AnimatedContainer delay={0.1}>
             <PageHeader
                 title="Cheques"
                 subtitle="Post-dated cheque lifecycle management"
@@ -193,62 +193,64 @@ export default function Cheques() {
                 }
             />
 
-            {/* Filter Bar */}
-            <Box mb={3} display="flex" gap={2} p={2} component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                <TextField
-                    size="small"
-                    label="Search by Cheque ID"
-                    type="number"
-                    placeholder="Enter ID"
-                    value={searchId}
-                    onChange={(e) => setSearchId(e.target.value)}
-                    sx={{ width: 250 }}
-                />
-                {searchId && (
-                    <Button
-                        color="inherit"
-                        onClick={() => setSearchId('')}
-                    >
-                        Clear
-                    </Button>
-                )}
-            </Box>
+            <DashboardCard title="Cheque Records" subtitle="Track and manage post-dated cheques">
+                {/* Filter Bar */}
+                <Box mb={3} display="flex" gap={2} alignItems="center">
+                    <TextField
+                        size="small"
+                        label="Search by Cheque ID"
+                        type="number"
+                        placeholder="Enter ID"
+                        value={searchId}
+                        onChange={(e) => setSearchId(e.target.value)}
+                        sx={{ width: 250 }}
+                    />
+                    {searchId && (
+                        <Button
+                            color="inherit"
+                            onClick={() => setSearchId('')}
+                        >
+                            Clear
+                        </Button>
+                    )}
+                </Box>
 
-            <DataTable
-                columns={columns}
-                data={cheques}
-                searchKey="chequeNumber"
-                loading={loading}
-                emptyTitle="No cheques found"
-                emptyDescription="Start by adding your first cheque record."
-                emptyAction={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={() => handleOpenDialog()}
-                    >
-                        Add First Cheque
-                    </Button>
-                }
-                actions={(row) => (
-                    <>
-                        <Tooltip title="Edit">
-                            <IconButton size="small" onClick={() => handleOpenDialog(row)}>
-                                <Edit fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                            <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleOpenDeleteDialog(row.id)}
-                            >
-                                <Delete fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </>
-                )}
-            />
+                <DataTable
+                    columns={columns}
+                    data={cheques}
+                    searchKey="chequeNumber"
+                    loading={loading}
+                    emptyTitle="No cheques found"
+                    emptyDescription="Start by adding your first cheque record."
+                    emptyAction={
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={() => handleOpenDialog()}
+                        >
+                            Add First Cheque
+                        </Button>
+                    }
+                    actions={(row) => (
+                        <>
+                            <Tooltip title="Edit">
+                                <IconButton size="small" onClick={() => handleOpenDialog(row)}>
+                                    <Edit fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete">
+                                <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleOpenDeleteDialog(row.id)}
+                                >
+                                    <Delete fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
+                    )}
+                />
+            </DashboardCard>
 
             {/* Create/Edit Dialog */}
             <FormDialog
@@ -359,6 +361,6 @@ export default function Cheques() {
                 severity="error"
                 loading={submitting}
             />
-        </Box>
+        </AnimatedContainer>
     );
 }
