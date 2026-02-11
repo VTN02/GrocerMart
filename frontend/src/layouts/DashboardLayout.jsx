@@ -9,7 +9,7 @@ import {
     Menu as MenuIcon, ChevronLeft, Dashboard, People,
     Inventory, SwapHoriz, CreditCard, AccountBalance, Receipt,
     LocalShipping, ShoppingCart, LightMode, DarkMode, Logout,
-    Notifications, Settings, Person
+    Notifications, Settings, Person, Delete
 } from '@mui/icons-material';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { ColorModeContext } from '../theme/ThemeProvider';
@@ -94,6 +94,7 @@ export default function DashboardLayout() {
         { text: 'Orders', icon: <Receipt />, path: '/orders', roles: ['ADMIN', 'CASHIER'] },
         { text: 'Suppliers', icon: <LocalShipping />, path: '/suppliers', roles: ['ADMIN'] },
         { text: 'Purchase Orders', icon: <ShoppingCart />, path: '/purchase-orders', roles: ['ADMIN'] },
+        { text: 'Trash', icon: <Delete />, path: '/trash', roles: ['ADMIN'] },
     ];
 
     const handleLogout = () => {
@@ -300,9 +301,9 @@ export default function DashboardLayout() {
 
             <Main open={open}>
                 <Toolbar sx={{ minHeight: 64 }} />
-                <Container maxWidth={false} sx={{ py: 4 }}>
+                <Box sx={{ width: '100%', p: 3 }}>
                     <Outlet />
-                </Container>
+                </Box>
             </Main>
         </Box>
     );

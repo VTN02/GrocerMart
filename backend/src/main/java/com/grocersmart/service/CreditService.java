@@ -21,6 +21,7 @@ public class CreditService {
 
     private final CreditCustomerRepository customerRepository;
     private final CreditPaymentRepository paymentRepository;
+    private final TrashCreditCustomerService trashCreditCustomerService;
 
     public CreditCustomerDto createCustomer(CreditCustomerDto dto) {
         CreditCustomer customer = new CreditCustomer();
@@ -51,10 +52,8 @@ public class CreditService {
     }
 
     public void deleteCustomer(Long id) {
-        CreditCustomer customer = customerRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Customer not found"));
-        customer.setStatus(CreditCustomer.Status.INACTIVE);
-        customerRepository.save(customer);
+        // Use trash system to archive and delete
+        trashCreditCustomerService.archiveAndDelete(id, "Deleted via API", null);
     }
 
     public List<CreditPaymentDto> getCustomerPayments(Long customerId) {

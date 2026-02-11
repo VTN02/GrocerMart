@@ -49,7 +49,7 @@ export default function Products() {
             } else {
                 const { data } = await getProducts({
                     category: filterCategory || undefined,
-                    status: showArchived ? undefined : 'ACTIVE',
+                    status: showArchived ? 'DISCONTINUED' : 'ACTIVE',
                     size: 100 // Get a larger set for client-side table
                 });
                 setProducts(Array.isArray(data) ? data : (data ? [data] : []));
@@ -340,7 +340,7 @@ export default function Products() {
                                 color="warning"
                             />
                         }
-                        label="Show Archived"
+                        label={showArchived ? "Viewing Archived" : "View Archived"}
                     />
 
                     {(filterCategory || searchId || showArchived) && (

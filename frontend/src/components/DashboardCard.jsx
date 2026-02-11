@@ -52,9 +52,13 @@ export default function DashboardCard({
                             )}
                         </Box>
                         {action && (
-                            <IconButton size="small" sx={{ mt: -0.5 }}>
-                                <MoreVert fontSize="small" />
-                            </IconButton>
+                            <Box sx={{ mt: -0.5 }}>
+                                {React.isValidElement(action) ? action : (
+                                    <IconButton size="small">
+                                        <MoreVert fontSize="small" />
+                                    </IconButton>
+                                )}
+                            </Box>
                         )}
                     </Box>
                 )}

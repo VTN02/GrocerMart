@@ -20,6 +20,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.grocersmart.security.JwtTokenProvider tokenProvider;
+    private final TrashUserService trashUserService;
 
     public com.grocersmart.dto.AuthResponse register(AuthRegisterRequest request) {
         if (userRepository.count() > 0) {
@@ -108,11 +109,8 @@ public class UserService {
 
     @Transactional
     public void deleteUser(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("User not found"));
-        // Soft delete
-        user.setStatus(User.Status.INACTIVE);
-        userRepository.save(user);
+        // Use trash system to archive and delete
+        trashUserService.archiveAndDelete(id, "Deleted via API", null);
     }
 
     @Transactional

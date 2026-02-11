@@ -1,0 +1,72 @@
+import { useState, useEffect, useCallback } from 'react';
+import * as api from '../api/trash';
+
+// Helper for data fetching
+const useFetch = (fetchFunction) => {
+    const [data, setData] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetchFunction();
+            setData(response.data);
+            setError(null);
+        } catch (err) {
+            setError(err);
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [fetchFunction]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    return { data, isLoading, error, refetch: fetchData };
+};
+
+// Helper for mutations
+const useMutation = (mutationFunction, eventName) => {
+    const [isLoading, setIsLoading] = useState(false);
+
+    const mutateAsync = async (id) => {
+        setIsLoading(true);
+        try {
+            await mutationFunction(id);
+            if (eventName) {
+                window.dispatchEvent(new Event(eventName));
+            }
+            return true;
+        } catch (error) {
+            console.error(error);
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return { mutateAsync, isLoading };
+};
+
+// Users
+export const useDeletedUsers = () => useFetch(api.getDeletedUsers);
+export const useRestoreUser = () => useMutation(api.restoreUser, 'userRestored');
+export const useDeleteUserPermanent = () => useMutation(api.deleteUserPermanent);
+
+// Products
+export const useDeletedProducts = () => useFetch(api.getDeletedProducts);
+export const useRestoreProduct = () => useMutation(api.restoreProduct, 'productRestored');
+export const useDeleteProductPermanent = () => useMutation(api.deleteProductPermanent);
+
+// Suppliers
+export const useDeletedSuppliers = () => useFetch(api.getDeletedSuppliers);
+export const useRestoreSupplier = () => useMutation(api.restoreSupplier, 'supplierRestored');
+export const useDeleteSupplierPermanent = () => useMutation(api.deleteSupplierPermanent);
+
+// Credit Customers
+export const useDeletedCustomers = () => useFetch(api.getDeletedCustomers);
+export const useRestoreCustomer = () => useMutation(api.restoreCustomer, 'creditCustomerRestored');
+export const useDeleteCustomerPermanent = () => useMutation(api.deleteCustomerPermanent);

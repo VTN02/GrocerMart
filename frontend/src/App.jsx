@@ -25,6 +25,7 @@ import OrderDetails from './pages/OrderDetails';
 import Suppliers from './pages/Suppliers';
 import PurchaseOrders from './pages/PurchaseOrders';
 import PurchaseOrderDetails from './pages/PurchaseOrderDetails';
+import Trash from './pages/Trash';
 
 // Guards
 const ProtectedRoute = ({ children }) => {
@@ -116,6 +117,7 @@ function App() {
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="purchase-orders" element={<PurchaseOrders />} />
             <Route path="purchase-orders/:id/items" element={<PurchaseOrderDetails />} />
+            <Route path="trash" element={<Trash />} />
             <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           </Route>
 

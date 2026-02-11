@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box, Grid, Skeleton, Typography, useTheme, Button, Chip, Stack, IconButton, Tooltip
 } from '@mui/material';
@@ -6,6 +7,8 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer,
     PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
+import SalesTrendChart from '../components/charts/SalesTrendChart';
+import ChequeLifecycleChart from '../components/charts/ChequeLifecycleChart';
 import {
     Inventory, People, AccountBalance, Receipt,
     AttachMoney, Add, Upload, TrendingUp, Warning, CheckCircle
@@ -41,6 +44,7 @@ const toDateKey = (date) => {
 
 export default function Dashboard() {
     const theme = useTheme();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         products: 0,
@@ -54,6 +58,8 @@ export default function Dashboard() {
     });
     const [chartData, setChartData] = useState([]);
     const [pieData, setPieData] = useState([]);
+    const [allOrders, setAllOrders] = useState([]);
+    const [timeRange, setTimeRange] = useState('7d');
 
     const currentDate = new Date().toLocaleDateString('en-US', {
         weekday: 'long',
@@ -96,6 +102,7 @@ export default function Dashboard() {
                     outstandingCredit,
                     lowStockCount,
                 });
+                setAllOrders(orders);
 
                 // Pie Data (Cheque Status)
                 const statusColor = {
@@ -119,35 +126,7 @@ export default function Dashboard() {
                         .filter(d => d.value > 0)
                 );
 
-                const now = new Date();
-                const days = Array.from({ length: 7 }).map((_, idx) => {
-                    const d = new Date(now);
-                    d.setDate(now.getDate() - (6 - idx));
-                    return d;
-                });
 
-                const byDate = orders.reduce((acc, curr) => {
-                    const dateKey = curr.orderDate ? curr.orderDate.split('T')[0] : null;
-                    if (!dateKey) return acc;
-                    if (!acc[dateKey]) {
-                        acc[dateKey] = { orders: 0, revenue: 0 };
-                    }
-                    acc[dateKey].orders += 1;
-                    acc[dateKey].revenue += Number(curr.totalAmount || 0);
-                    return acc;
-                }, {});
-
-                setChartData(
-                    days.map((d) => {
-                        const key = toDateKey(d);
-                        const aggregate = byDate[key] || { orders: 0, revenue: 0 };
-                        return {
-                            date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                            orders: aggregate.orders,
-                            revenue: Number(aggregate.revenue.toFixed(2)),
-                        };
-                    })
-                );
 
             } catch (e) {
                 console.error(e);
@@ -157,6 +136,43 @@ export default function Dashboard() {
         };
         fetchData();
     }, []);
+
+    useEffect(() => {
+        const calculateTrend = () => {
+            if (!allOrders) return;
+            const daysCount = timeRange === '7d' ? 7 : 30;
+            const now = new Date();
+            const days = Array.from({ length: daysCount }).map((_, idx) => {
+                const d = new Date(now);
+                d.setDate(now.getDate() - ((daysCount - 1) - idx));
+                return d;
+            });
+
+            const byDate = allOrders.reduce((acc, curr) => {
+                const dateKey = curr.orderDate ? curr.orderDate.split('T')[0] : null;
+                if (!dateKey) return acc;
+                if (!acc[dateKey]) {
+                    acc[dateKey] = { orders: 0, revenue: 0 };
+                }
+                acc[dateKey].orders += 1;
+                acc[dateKey].revenue += Number(curr.totalAmount || 0);
+                return acc;
+            }, {});
+
+            setChartData(
+                days.map((d) => {
+                    const key = toDateKey(d);
+                    const aggregate = byDate[key] || { orders: 0, revenue: 0 };
+                    return {
+                        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                        orders: aggregate.orders,
+                        revenue: Number(aggregate.revenue.toFixed(2)),
+                    };
+                })
+            );
+        };
+        calculateTrend();
+    }, [allOrders, timeRange]);
 
     return (
         <AnimatedContainer delay={0.1}>
@@ -201,6 +217,7 @@ export default function Dashboard() {
                             variant="contained"
                             startIcon={<Add />}
                             sx={{ borderRadius: 2 }}
+                            onClick={() => navigate('/products')}
                         >
                             Add Product
                         </Button>
@@ -208,6 +225,7 @@ export default function Dashboard() {
                             variant="outlined"
                             startIcon={<Receipt />}
                             sx={{ borderRadius: 2 }}
+                            onClick={() => navigate('/orders')}
                         >
                             New Order
                         </Button>
@@ -218,6 +236,7 @@ export default function Dashboard() {
                                     border: (theme) => `1px solid ${theme.palette.divider}`,
                                     borderRadius: 2,
                                 }}
+                                onClick={() => navigate('/products')}
                             >
                                 <Upload />
                             </IconButton>
@@ -300,168 +319,31 @@ export default function Dashboard() {
 
             {/* Charts */}
             <Grid container spacing={3}>
-                <Grid item xs={12} lg={8}>
+                <Grid item xs={12} lg={7}>
                     <MotionBox
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.5, delay: 0.3 }}
                     >
-                        <DashboardCard
-                            title="Sales Trend"
-                            subtitle="Daily orders and revenue analysis"
-                        >
-                            <Box height={400}>
-                                {loading ? (
-                                    <Skeleton variant="rounded" height={400} />
-                                ) : chartData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
-                                            <defs>
-                                                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0} />
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} opacity={0.5} />
-                                            <XAxis
-                                                dataKey="date"
-                                                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-                                                stroke={theme.palette.divider}
-                                                interval={0}
-                                                angle={-45}
-                                                textAnchor="end"
-                                                height={60}
-                                            />
-                                            <YAxis
-                                                yAxisId="left"
-                                                allowDecimals={false}
-                                                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-                                                stroke={theme.palette.divider}
-                                                label={{ value: 'Orders', angle: -90, position: 'insideLeft', fill: theme.palette.text.secondary }}
-                                            />
-                                            <YAxis
-                                                yAxisId="right"
-                                                orientation="right"
-                                                tick={{ fontSize: 12, fill: theme.palette.text.secondary }}
-                                                stroke={theme.palette.divider}
-                                                tickFormatter={(v) => {
-                                                    const num = Number(v || 0);
-                                                    return num >= 1000 ? `₹${Math.round(num / 1000)}k` : `₹${Math.round(num)}`;
-                                                }}
-                                            />
-                                            <ChartTooltip
-                                                formatter={(value, name) => {
-                                                    if (name === 'revenue') return [formatCurrency(value), 'Revenue'];
-                                                    if (name === 'orders') return [value, 'Orders'];
-                                                    return [value, name];
-                                                }}
-                                                contentStyle={{
-                                                    backgroundColor: theme.palette.background.paper,
-                                                    border: `1px solid ${theme.palette.divider}`,
-                                                    borderRadius: '12px',
-                                                    boxShadow: theme.shadows[3],
-                                                }}
-                                            />
-                                            <Legend
-                                                wrapperStyle={{ paddingTop: '20px' }}
-                                                iconType="circle"
-                                            />
-                                            <Line
-                                                yAxisId="left"
-                                                type="monotone"
-                                                dataKey="orders"
-                                                stroke={theme.palette.secondary.main}
-                                                strokeWidth={3}
-                                                dot={{ r: 4, fill: theme.palette.secondary.main }}
-                                                activeDot={{ r: 6 }}
-                                                name="Orders"
-                                            />
-                                            <Line
-                                                yAxisId="right"
-                                                type="monotone"
-                                                dataKey="revenue"
-                                                stroke={theme.palette.primary.main}
-                                                strokeWidth={3}
-                                                dot={{ r: 4, fill: theme.palette.primary.main }}
-                                                activeDot={{ r: 6 }}
-                                                fill="url(#colorRevenue)"
-                                                name="Revenue"
-                                            />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                ) : (
-                                    <EmptyState
-                                        title="No sales data yet"
-                                        message="Sales trends will appear here once you start processing orders"
-                                    />
-                                )}
-                            </Box>
-                        </DashboardCard>
+                        <SalesTrendChart
+                            data={chartData}
+                            loading={loading}
+                            timeRange={timeRange}
+                            onTimeRangeChange={setTimeRange}
+                        />
                     </MotionBox>
                 </Grid>
 
-                <Grid item xs={12} lg={4}>
+                <Grid item xs={12} lg={5}>
                     <MotionBox
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.5, delay: 0.4 }}
                     >
-                        <DashboardCard
-                            title="Cheque Lifecycle"
-                            subtitle="Status distribution"
-                        >
-                            <Box height={400} display="flex" alignItems="center" justifyContent="center">
-                                {loading ? (
-                                    <Skeleton variant="circular" width={250} height={250} />
-                                ) : pieData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart margin={{ top: 20, bottom: 20 }}>
-                                            <Pie
-                                                data={pieData}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius={80}
-                                                outerRadius={120}
-                                                paddingAngle={5}
-                                                dataKey="value"
-                                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                                labelLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
-                                            >
-                                                {pieData.map((entry, index) => (
-                                                    <Cell
-                                                        key={`cell-${index}`}
-                                                        fill={entry.color}
-                                                        style={{
-                                                            filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.2))',
-                                                            cursor: 'pointer',
-                                                        }}
-                                                    />
-                                                ))}
-                                            </Pie>
-                                            <Legend
-                                                layout="horizontal"
-                                                verticalAlign="bottom"
-                                                align="center"
-                                                wrapperStyle={{ paddingTop: '20px' }}
-                                            />
-                                            <ChartTooltip
-                                                contentStyle={{
-                                                    backgroundColor: theme.palette.background.paper,
-                                                    border: `1px solid ${theme.palette.divider}`,
-                                                    borderRadius: '12px',
-                                                    boxShadow: theme.shadows[3],
-                                                }}
-                                            />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                ) : (
-                                    <EmptyState
-                                        title="No cheques yet"
-                                        message="Cheque status breakdown will appear here"
-                                    />
-                                )}
-                            </Box>
-                        </DashboardCard>
+                        <ChequeLifecycleChart
+                            data={pieData}
+                            loading={loading}
+                        />
                     </MotionBox>
                 </Grid>
             </Grid>

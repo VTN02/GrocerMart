@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 public class SupplierService {
 
     private final SupplierRepository supplierRepository;
+    private final TrashSupplierService trashSupplierService;
 
     public SupplierDto createSupplier(SupplierDto dto) {
         Supplier supplier = new Supplier();
@@ -46,10 +47,8 @@ public class SupplierService {
     }
 
     public void deleteSupplier(Long id) {
-        Supplier supplier = supplierRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Supplier not found"));
-        supplier.setStatus(Supplier.Status.INACTIVE);
-        supplierRepository.save(supplier);
+        // Use trash system to archive and delete
+        trashSupplierService.archiveAndDelete(id, "Deleted via API", null);
     }
 
     private SupplierDto mapToDto(Supplier s) {

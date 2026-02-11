@@ -231,24 +231,30 @@ export default function Cheques() {
                             Add First Cheque
                         </Button>
                     }
-                    actions={(row) => (
-                        <>
-                            <Tooltip title="Edit">
-                                <IconButton size="small" onClick={() => handleOpenDialog(row)}>
-                                    <Edit fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete">
-                                <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleOpenDeleteDialog(row.id)}
-                                >
-                                    <Delete fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </>
-                    )}
+                    actions={(row) => {
+                        const canDelete = row.status === 'PENDING';
+                        return (
+                            <>
+                                <Tooltip title="Edit">
+                                    <IconButton size="small" onClick={() => handleOpenDialog(row)}>
+                                        <Edit fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={canDelete ? "Delete" : "Only PENDING cheques can be deleted"}>
+                                    <span>
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => handleOpenDeleteDialog(row.id)}
+                                            disabled={!canDelete}
+                                        >
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    </span>
+                                </Tooltip>
+                            </>
+                        );
+                    }}
                 />
             </DashboardCard>
 

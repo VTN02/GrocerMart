@@ -23,6 +23,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final StockConversionRepository stockConversionRepository;
+    private final TrashProductService trashProductService;
 
     public ProductDto createProduct(ProductDto dto) {
         Product product = new Product();
@@ -61,10 +62,8 @@ public class ProductService {
     }
 
     public void deleteProduct(Long id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
-        product.setStatus(Product.Status.DISCONTINUED);
-        productRepository.save(product);
+        // Use trash system to archive and delete
+        trashProductService.archiveAndDelete(id, "Deleted via API", null);
     }
 
     @Transactional
