@@ -13,6 +13,7 @@ public class ProductDto {
     private Integer unitQty;
     private Double unitPrice;
     private Double bulkPrice;
+    private Double purchasePrice;
     private Integer reorderLevel;
     private Product.Status status;
     private java.time.LocalDateTime createdAt;

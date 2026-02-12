@@ -28,6 +28,7 @@ public class Product {
 
     private Double unitPrice = 0.0;
     private Double bulkPrice = 0.0;
+    private Double purchasePrice = 0.0;
 
     private Integer reorderLevel = 0;
 

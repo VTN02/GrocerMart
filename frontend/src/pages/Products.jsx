@@ -17,6 +17,7 @@ const initialFormData = {
     category: '',
     unitPrice: 0,
     bulkPrice: 0,
+    purchasePrice: 0,
     bulkQty: 0,
     unitQty: 0,
     unitsPerBulk: 1,
@@ -86,6 +87,7 @@ export default function Products() {
                 category: product.category,
                 unitPrice: product.unitPrice,
                 bulkPrice: product.bulkPrice,
+                purchasePrice: product.purchasePrice || 0,
                 bulkQty: product.bulkQty,
                 unitQty: product.unitQty,
                 unitsPerBulk: product.unitsPerBulk,
@@ -205,6 +207,13 @@ export default function Products() {
         { id: 'id', label: 'ID', minWidth: 60 },
         { id: 'name', label: 'Product Name', minWidth: 180 },
         { id: 'category', label: 'Category', minWidth: 120 },
+        {
+            id: 'purchasePrice',
+            label: 'Purchase Price',
+            minWidth: 100,
+            align: 'right',
+            render: (val) => formatCurrency(val)
+        },
         { id: 'unitType', label: 'Unit Type', minWidth: 100 },
         {
             id: 'unitPrice',
@@ -421,7 +430,7 @@ export default function Products() {
                             disabled={submitting}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12} sm={4}>
                         <TextField
                             fullWidth
                             type="number"
@@ -433,13 +442,25 @@ export default function Products() {
                             inputProps={{ min: 0, step: 0.01 }}
                         />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12} sm={4}>
                         <TextField
                             fullWidth
                             type="number"
                             label="Bulk Price (₹)"
                             value={formData.bulkPrice}
                             onChange={(e) => setFormData({ ...formData, bulkPrice: parseFloat(e.target.value) })}
+                            required
+                            disabled={submitting}
+                            inputProps={{ min: 0, step: 0.01 }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="Purchase Price (₹)"
+                            value={formData.purchasePrice}
+                            onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) })}
                             required
                             disabled={submitting}
                             inputProps={{ min: 0, step: 0.01 }}

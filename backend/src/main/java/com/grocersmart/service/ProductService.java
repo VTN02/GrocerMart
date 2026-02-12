@@ -99,6 +99,7 @@ public class ProductService {
         dto.setReorderLevel(p.getReorderLevel());
         dto.setUnitPrice(p.getUnitPrice());
         dto.setBulkPrice(p.getBulkPrice());
+        dto.setPurchasePrice(p.getPurchasePrice());
         dto.setStatus(p.getStatus());
         dto.setCreatedAt(p.getCreatedAt());
         dto.setUpdatedAt(p.getUpdatedAt());
@@ -118,6 +119,8 @@ public class ProductService {
             p.setUnitPrice(dto.getUnitPrice());
         if (dto.getBulkPrice() != null)
             p.setBulkPrice(dto.getBulkPrice());
+        if (dto.getPurchasePrice() != null)
+            p.setPurchasePrice(dto.getPurchasePrice());
         if (dto.getReorderLevel() != null)
             p.setReorderLevel(dto.getReorderLevel());
     }
