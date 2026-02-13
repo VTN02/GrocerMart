@@ -41,7 +41,7 @@ public class UserService {
         User saved = userRepository.save(user);
         String token = tokenProvider.generateToken(saved.getUsername());
         return new com.grocersmart.dto.AuthResponse("Registration successful", saved.getRole().name(),
-                saved.getUsername(), token);
+                saved.getUsername(), saved.getFullName(), token);
     }
 
     public UserDto register(UserDto dto) {
@@ -74,7 +74,7 @@ public class UserService {
 
         String token = tokenProvider.generateToken(user.getUsername());
         return new com.grocersmart.dto.AuthResponse("Login successful", user.getRole().name(), user.getUsername(),
-                token);
+                user.getFullName(), token);
     }
 
     public List<UserDto> getAllUsers() {
