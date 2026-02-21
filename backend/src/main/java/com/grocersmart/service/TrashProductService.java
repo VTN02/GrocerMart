@@ -35,6 +35,7 @@ public class TrashProductService {
         deletedProduct.setDeletedAt(LocalDateTime.now());
         deletedProduct.setDeletedByUserId(deletedByUserId);
         deletedProduct.setReason(reason);
+        deletedProduct.setPublicId(product.getPublicId());
 
         try {
             String snapshot = objectMapper.writeValueAsString(product);
@@ -114,6 +115,7 @@ public class TrashProductService {
     private DeletedItemDto mapToDto(DeletedProduct deleted) {
         DeletedItemDto dto = new DeletedItemDto();
         dto.setDeletedId(deleted.getDeletedId());
+        dto.setId(deleted.getDeletedId());
         dto.setOriginalId(deleted.getOriginalId());
         dto.setDeletedAt(deleted.getDeletedAt());
         dto.setDeletedByUserId(deleted.getDeletedByUserId());
@@ -122,6 +124,7 @@ public class TrashProductService {
         dto.setRestored(deleted.getRestored());
         dto.setRestoredAt(deleted.getRestoredAt());
         dto.setRestoreCount(deleted.getRestoreCount());
+        dto.setPublicId(deleted.getPublicId());
 
         try {
             Product product = objectMapper.readValue(deleted.getSnapshotJson(), Product.class);

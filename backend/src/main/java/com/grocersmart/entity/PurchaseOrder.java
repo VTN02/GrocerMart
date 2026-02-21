@@ -16,6 +16,9 @@ public class PurchaseOrder {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "public_id", unique = true, nullable = false, length = 20)
+    private String publicId;
+
     @Column(nullable = false)
     private Long supplierId;
 

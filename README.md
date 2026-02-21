@@ -33,3 +33,43 @@
 *   **Base URL**: `http://localhost:8081/api`
 *   **Response Shape**: Standardized to unwrap `{ data: { content: [] } }` or `{ data: [] }`.
 *   **Axios Instance**: Single instance in `src/api/axios.js` used by all services.
+
+# Sales Module Guide (New Feature)
+
+## Overview
+Added a dedicated Sales module to track daily sales records and item-wise breakdowns. This data powers the new Analytics Dashboard for demand forecasting.
+
+## Backend Testing (Swagger)
+1. Navigate to: `http://localhost:8080/swagger-ui.html`
+2. Login (`POST /api/auth/login`) to get Bearer token.
+3. Authorize with `Bearer <token>`.
+4. Go to `sales-controller`.
+5. Use `POST /api/sales` to create a record.
+
+### Example JSON Payload
+```json
+{
+  "salesDate": "2026-02-13",
+  "note": "Initial sales entry",
+  "items": [
+    {
+      "productId": 1,
+      "qtySold": 10,
+      "unitPrice": 50.00
+    },
+    {
+      "productId": 2,
+      "qtySold": 5,
+      "unitPrice": 120.00
+    }
+  ],
+  "paymentMethod": "CASH" // Or CREDIT
+}
+```
+
+## Sales Features 2.0 (Enhanced)
+- **Automatic Invoicing**: Generates sequential IDs (`#0001`, `#0002`...) safely in database.
+- **Advanced Filtering**: Search by ID, partial invoice match, date range, or revenue amount.
+- **Professional Details View**: Modal showing full invoice summary and line items.
+- **Payment Method Tracking**: Enum support (CASH/CREDIT) for future accounting integration.
+- **Real-time Updates**: Data refreshes instantly after modification.

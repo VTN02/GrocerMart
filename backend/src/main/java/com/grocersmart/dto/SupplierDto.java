@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 public class SupplierDto {
     private Long id;
+    private String publicId;
     private String name;
     private String phone;
     private String address;
@@ -13,4 +14,7 @@ public class SupplierDto {
     private Supplier.Status status;
     private java.time.LocalDateTime createdAt;
     private java.time.LocalDateTime updatedAt;
+    private Boolean isDeleted;
+    private java.time.LocalDateTime deletedAt;
+    private String deletedBy;
 }

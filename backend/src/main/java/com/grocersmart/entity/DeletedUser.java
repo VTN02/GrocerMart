@@ -17,6 +17,9 @@ public class DeletedUser {
     @Column(nullable = false)
     private Long originalId;
 
+    @Column(name = "public_id", length = 20)
+    private String publicId;
+
     @Column(nullable = false)
     private LocalDateTime deletedAt = LocalDateTime.now();
 

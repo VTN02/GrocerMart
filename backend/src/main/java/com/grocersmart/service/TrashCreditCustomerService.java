@@ -35,6 +35,7 @@ public class TrashCreditCustomerService {
         deletedCreditCustomer.setDeletedAt(LocalDateTime.now());
         deletedCreditCustomer.setDeletedByUserId(deletedByUserId);
         deletedCreditCustomer.setReason(reason);
+        deletedCreditCustomer.setPublicId(creditCustomer.getPublicId());
 
         try {
             String snapshot = objectMapper.writeValueAsString(creditCustomer);
@@ -114,6 +115,7 @@ public class TrashCreditCustomerService {
     private DeletedItemDto mapToDto(DeletedCreditCustomer deleted) {
         DeletedItemDto dto = new DeletedItemDto();
         dto.setDeletedId(deleted.getDeletedId());
+        dto.setId(deleted.getDeletedId());
         dto.setOriginalId(deleted.getOriginalId());
         dto.setDeletedAt(deleted.getDeletedAt());
         dto.setDeletedByUserId(deleted.getDeletedByUserId());
@@ -122,6 +124,7 @@ public class TrashCreditCustomerService {
         dto.setRestored(deleted.getRestored());
         dto.setRestoredAt(deleted.getRestoredAt());
         dto.setRestoreCount(deleted.getRestoreCount());
+        dto.setPublicId(deleted.getPublicId());
 
         try {
             CreditCustomer creditCustomer = objectMapper.readValue(deleted.getSnapshotJson(), CreditCustomer.class);

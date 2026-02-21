@@ -10,4 +10,11 @@ public class GrocerSmartApplication {
         SpringApplication.run(GrocerSmartApplication.class, args);
     }
 
+    @org.springframework.context.annotation.Bean
+    public org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy flywayMigrationStrategy() {
+        return flyway -> {
+            flyway.repair();
+            flyway.migrate();
+        };
+    }
 }

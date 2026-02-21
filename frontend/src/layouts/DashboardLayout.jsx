@@ -9,7 +9,7 @@ import {
     Menu as MenuIcon, ChevronLeft, Dashboard, People,
     Inventory, SwapHoriz, CreditCard, AccountBalance, Receipt,
     LocalShipping, ShoppingCart, LightMode, DarkMode, Logout,
-    Notifications, Settings, Person, Delete
+    Notifications, Settings, Person, Delete, Timeline, Assessment
 } from '@mui/icons-material';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { ColorModeContext } from '../theme/ThemeProvider';
@@ -19,25 +19,35 @@ const drawerWidth = 280;
 const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })(
     ({ theme, open }) => ({
         flexGrow: 1,
-        padding: 0,
+        height: '100vh',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        backgroundColor: theme.palette.background.default,
         transition: theme.transitions.create('margin', {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
         }),
-        marginLeft: 0,
-        [theme.breakpoints.up('md')]: {
-            marginLeft: open ? 0 : `-${drawerWidth}px`,
+        marginLeft: `-${drawerWidth}px`,
+        [theme.breakpoints.down('md')]: {
+            marginLeft: 0,
         },
-        backgroundColor: theme.palette.background.default,
-        minHeight: '100vh',
-        overflowX: 'hidden', // Prevent horizontal scroll on main page
-        width: '100%',       // Ensure it takes available width
+        ...(open && {
+            transition: theme.transitions.create('margin', {
+                easing: theme.transitions.easing.easeOut,
+                duration: theme.transitions.duration.enteringScreen,
+            }),
+            marginLeft: 0,
+        }),
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
     }),
 );
 
 const AppBar = styled(MuiAppBar, { shouldForwardProp: (prop) => prop !== 'open' })(
     ({ theme, open }) => ({
-        backgroundColor: theme.palette.background.paper,
+        backgroundColor: alpha(theme.palette.background.paper, 0.8),
+        backdropFilter: 'blur(8px)',
         color: theme.palette.text.primary,
         boxShadow: 'none',
         borderBottom: `1px solid ${theme.palette.divider}`,
@@ -46,6 +56,18 @@ const AppBar = styled(MuiAppBar, { shouldForwardProp: (prop) => prop !== 'open' 
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
         }),
+        ...(open && {
+            width: `calc(100% - ${drawerWidth}px)`,
+            marginLeft: `${drawerWidth}px`,
+            transition: theme.transitions.create(['margin', 'width'], {
+                easing: theme.transitions.easing.easeOut,
+                duration: theme.transitions.duration.enteringScreen,
+            }),
+        }),
+        [theme.breakpoints.down('md')]: {
+            width: '100%',
+            marginLeft: 0,
+        },
     }),
 );
 
@@ -85,17 +107,49 @@ export default function DashboardLayout() {
     const fullName = localStorage.getItem('fullName') || username;
 
     const menuItems = [
-        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', roles: ['ADMIN', 'CASHIER'] },
+        { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard', roles: ['ADMIN', 'CASHIER'], moduleKey: 'DASHBOARD' },
         { text: 'Users', icon: <People />, path: '/users', roles: ['ADMIN'] },
-        { text: 'Products', icon: <Inventory />, path: '/products', roles: ['ADMIN', 'CASHIER'] },
-        { text: 'Convert Stock', icon: <SwapHoriz />, path: '/inventory/convert', roles: ['ADMIN', 'CASHIER'] },
-        { text: 'Credit Customers', icon: <CreditCard />, path: '/credit-customers', roles: ['ADMIN', 'CASHIER'] },
-        { text: 'Cheques', icon: <AccountBalance />, path: '/cheques', roles: ['ADMIN', 'CASHIER'] },
-        { text: 'Orders', icon: <Receipt />, path: '/orders', roles: ['ADMIN', 'CASHIER'] },
-        { text: 'Suppliers', icon: <LocalShipping />, path: '/suppliers', roles: ['ADMIN'] },
-        { text: 'Purchase Orders', icon: <ShoppingCart />, path: '/purchase-orders', roles: ['ADMIN'] },
-        { text: 'Trash', icon: <Delete />, path: '/trash', roles: ['ADMIN'] },
+        { text: 'Products', icon: <Inventory />, path: '/products', roles: ['ADMIN', 'CASHIER'], moduleKey: 'PRODUCTS' },
+        { text: 'Convert Stock', icon: <SwapHoriz />, path: '/inventory/convert', roles: ['ADMIN', 'CASHIER'], moduleKey: 'INVENTORY_CONVERT' },
+        { text: 'Credit Customers', icon: <CreditCard />, path: '/credit-customers', roles: ['ADMIN', 'CASHIER'], moduleKey: 'CREDIT_CUSTOMERS' },
+        { text: 'Cheques', icon: <AccountBalance />, path: '/cheques', roles: ['ADMIN', 'CASHIER'], moduleKey: 'CHEQUES' },
+        { text: 'Orders', icon: <Receipt />, path: '/orders', roles: ['ADMIN', 'CASHIER'], moduleKey: 'ORDERS' },
+        { text: 'Sales', icon: <Timeline />, path: '/sales', roles: ['ADMIN', 'CASHIER'], moduleKey: 'SALES' },
+        { text: 'Reports', icon: <Assessment />, path: '/reports', roles: ['ADMIN', 'CASHIER'], moduleKey: 'REPORTS' },
+        { text: 'Suppliers', icon: <LocalShipping />, path: '/suppliers', roles: ['ADMIN', 'CASHIER'], moduleKey: 'SUPPLIERS' },
+        { text: 'Purchase Orders', icon: <ShoppingCart />, path: '/purchase-orders', roles: ['ADMIN', 'CASHIER'], moduleKey: 'PURCHASE_ORDERS' },
+        { text: 'Trash', icon: <Delete />, path: '/trash', roles: ['ADMIN', 'CASHIER'], moduleKey: 'TRASH' },
+        { text: 'Settings', icon: <Settings />, path: '/settings', roles: ['ADMIN'] },
     ];
+
+    const [permissions, setPermissions] = useState(JSON.parse(localStorage.getItem('permissions') || '{}'));
+
+    // Sync permissions periodically for real-time sidebar updates
+    React.useEffect(() => {
+        if (role !== 'CASHIER') return;
+
+        const updatePermissions = async () => {
+            try {
+                const { getCashierPermissions } = await import('../api/permissionsApi');
+                const { data } = await getCashierPermissions();
+                // data is { role, permissions }
+                const newPerms = data?.permissions || {};
+                localStorage.setItem('permissions', JSON.stringify(newPerms));
+                setPermissions(newPerms);
+            } catch (error) {
+                console.error("Auto-sync permissions failed", error);
+            }
+        };
+
+        const interval = setInterval(updatePermissions, 10000); // Sync every 10s
+        return () => clearInterval(interval);
+    }, [role]);
+
+    const filteredMenuItems = menuItems.filter(item => {
+        if (!item.roles.includes(role)) return false;
+        if (role === 'ADMIN') return true;
+        return permissions[item.moduleKey] === true;
+    });
 
     const handleLogout = () => {
         localStorage.clear();
@@ -242,7 +296,7 @@ export default function DashboardLayout() {
                 <Divider />
 
                 <List sx={{ px: 1.5, py: 2 }}>
-                    {menuItems.filter(item => item.roles.includes(role)).map((item) => {
+                    {filteredMenuItems.map((item) => {
                         const isActive = location.pathname === item.path;
                         return (
                             <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>

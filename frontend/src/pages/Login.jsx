@@ -32,6 +32,18 @@ export default function Login() {
             localStorage.setItem('role', data.role);
             localStorage.setItem('token', data.token);
 
+            // Fetch permissions if Role is Cashier
+            if (data.role === 'CASHIER') {
+                try {
+                    const { getCashierPermissions } = await import('../api/permissionsApi');
+                    const permRes = await getCashierPermissions();
+                    // permissions are in permRes.data.permissions due to axios unwrapping
+                    localStorage.setItem('permissions', JSON.stringify(permRes.data?.permissions || {}));
+                } catch (e) {
+                    console.error("Failed to fetch permissions during login", e);
+                }
+            }
+
             toast.success('Login successful!');
             navigate('/dashboard');
         } catch (err) {

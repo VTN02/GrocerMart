@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -19,26 +20,47 @@ public class ChequeService {
 
     private final ChequeRepository chequeRepository;
     private final CreditCustomerRepository customerRepository;
+    private final com.grocersmart.repository.SalesRecordRepository salesRecordRepository;
+    private final TrashChequeService trashChequeService;
+    private final PublicIdGeneratorService publicIdGeneratorService;
 
     public ChequeDto createCheque(ChequeDto dto) {
         Cheque cheque = new Cheque();
         mapToEntity(dto, cheque);
+        cheque.setPublicId(publicIdGeneratorService.nextId(com.grocersmart.common.EntityType.CHEQUE));
         cheque.setStatus(Cheque.Status.PENDING); // Default
         if (dto.getStatus() != null)
             cheque.setStatus(dto.getStatus());
         return mapToDto(chequeRepository.save(cheque));
     }
 
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ChequeDto> getCheques(
+            org.springframework.data.jpa.domain.Specification<Cheque> spec,
+            org.springframework.data.domain.Pageable pageable) {
+        return chequeRepository.findAll(spec, pageable)
+                .map(this::mapToDto);
+    }
+
+    @Transactional(readOnly = true)
     public List<ChequeDto> getAllCheques() {
         return chequeRepository.findAll().stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public ChequeDto getChequeById(Long id) {
         return chequeRepository.findById(id)
                 .map(this::mapToDto)
                 .orElseThrow(() -> new EntityNotFoundException("Cheque not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public ChequeDto getChequeByPublicId(String publicId) {
+        return chequeRepository.findByPublicId(publicId)
+                .map(this::mapToDto)
+                .orElseThrow(() -> new EntityNotFoundException("Cheque not found with publicId: " + publicId));
     }
 
     public ChequeDto updateCheque(Long id, ChequeDto dto) {
@@ -49,9 +71,24 @@ public class ChequeService {
     }
 
     @Transactional
-    public ChequeDto updateStatus(Long id, Cheque.Status newStatus) {
+    public ChequeDto updateStatus(Long id, ChequeDto statusUpdate) {
         Cheque cheque = chequeRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Cheque not found"));
+
+        Cheque.Status newStatus = statusUpdate.getStatus();
+        if (newStatus == null) throw new IllegalArgumentException("Status is required");
+
+        // Validation based on status
+        if (newStatus == Cheque.Status.DEPOSITED && statusUpdate.getDepositDate() == null) {
+            throw new IllegalArgumentException("Deposit date is required for DEPOSITED status");
+        }
+        if (newStatus == Cheque.Status.CLEARED && statusUpdate.getClearedDate() == null) {
+            throw new IllegalArgumentException("Cleared date is required for CLEARED status");
+        }
+        if (newStatus == Cheque.Status.BOUNCED) {
+            if (statusUpdate.getBouncedDate() == null) throw new IllegalArgumentException("Bounced date is required");
+            if (statusUpdate.getBounceReason() == null) throw new IllegalArgumentException("Bounce reason is required");
+        }
 
         // Business logic: if becoming BOUNCED and customerId exists
         if (newStatus == Cheque.Status.BOUNCED && cheque.getCustomerId() != null) {
@@ -61,12 +98,36 @@ public class ChequeService {
                         .orElseThrow(() -> new EntityNotFoundException("Customer not found for cheque"));
 
                 double current = customer.getOutstandingBalance() != null ? customer.getOutstandingBalance() : 0.0;
-                customer.setOutstandingBalance(current + cheque.getAmount());
+                customer.updateBalance(current + cheque.getAmount());
+                
+                cheque.setMigratedToDebt(true);
                 customerRepository.save(customer);
+
+                // Update linked invoice if exists
+                if (cheque.getInvoiceId() != null) {
+                    salesRecordRepository.findById(cheque.getInvoiceId()).ifPresent(invoice -> {
+                        BigDecimal currentPaid = invoice.getPaidAmount() != null ? invoice.getPaidAmount() : BigDecimal.ZERO;
+                        BigDecimal newPaid = currentPaid.subtract(BigDecimal.valueOf(cheque.getAmount()));
+                        if (newPaid.compareTo(BigDecimal.ZERO) < 0) newPaid = BigDecimal.ZERO;
+                        invoice.setPaidAmount(newPaid);
+                        
+                        if (newPaid.compareTo(BigDecimal.ZERO) == 0) {
+                            invoice.setPaymentStatus(com.grocersmart.entity.SalesRecord.PaymentStatus.UNPAID);
+                        } else if (newPaid.compareTo(invoice.getTotalRevenue()) < 0) {
+                            invoice.setPaymentStatus(com.grocersmart.entity.SalesRecord.PaymentStatus.PARTIAL);
+                        }
+                        salesRecordRepository.save(invoice);
+                    });
+                }
             }
         }
 
         cheque.setStatus(newStatus);
+        cheque.setDepositDate(statusUpdate.getDepositDate());
+        cheque.setClearedDate(statusUpdate.getClearedDate());
+        cheque.setBouncedDate(statusUpdate.getBouncedDate());
+        cheque.setBounceReason(statusUpdate.getBounceReason());
+
         return mapToDto(chequeRepository.save(cheque));
     }
 
@@ -75,14 +136,27 @@ public class ChequeService {
                 .orElseThrow(() -> new EntityNotFoundException("Cheque not found"));
 
         if (cheque.getStatus() != Cheque.Status.PENDING) {
-            throw new IllegalStateException("Cannot delete cheque unless status is PENDING");
+            throw new IllegalStateException("Only PENDING cheques can be moved to trash");
         }
-        chequeRepository.delete(cheque);
+        trashChequeService.moveToTrash(cheque);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getSummary() {
+        java.util.List<Cheque> all = chequeRepository.findAll();
+        java.util.Map<String, Object> summary = new java.util.HashMap<>();
+        summary.put("total", all.size());
+        summary.put("pending", all.stream().filter(c -> c.getStatus() == Cheque.Status.PENDING).count());
+        summary.put("cleared", all.stream().filter(c -> c.getStatus() == Cheque.Status.CLEARED).count());
+        summary.put("bounced", all.stream().filter(c -> c.getStatus() == Cheque.Status.BOUNCED).count());
+        summary.put("totalAmount", all.stream().mapToDouble(c -> c.getAmount() != null ? c.getAmount() : 0.0).sum());
+        return summary;
     }
 
     private ChequeDto mapToDto(Cheque c) {
         ChequeDto dto = new ChequeDto();
         dto.setId(c.getId());
+        dto.setPublicId(c.getPublicId());
         dto.setChequeNumber(c.getChequeNumber());
         dto.setCustomerId(c.getCustomerId());
         dto.setBankName(c.getBankName());
@@ -91,6 +165,12 @@ public class ChequeService {
         dto.setDueDate(c.getDueDate());
         dto.setStatus(c.getStatus());
         dto.setNote(c.getNote());
+        dto.setInvoiceId(c.getInvoiceId());
+        dto.setDepositDate(c.getDepositDate());
+        dto.setClearedDate(c.getClearedDate());
+        dto.setBouncedDate(c.getBouncedDate());
+        dto.setBounceReason(c.getBounceReason());
+        dto.setMigratedToDebt(c.getMigratedToDebt());
         dto.setCreatedAt(c.getCreatedAt());
         dto.setUpdatedAt(c.getUpdatedAt());
         return dto;
@@ -106,5 +186,12 @@ public class ChequeService {
         c.setDueDate(dto.getDueDate());
         if (dto.getNote() != null)
             c.setNote(dto.getNote());
+        c.setInvoiceId(dto.getInvoiceId());
+        c.setDepositDate(dto.getDepositDate());
+        c.setClearedDate(dto.getClearedDate());
+        c.setBouncedDate(dto.getBouncedDate());
+        c.setBounceReason(dto.getBounceReason());
+        if (dto.getMigratedToDebt() != null)
+            c.setMigratedToDebt(dto.getMigratedToDebt());
     }
 }

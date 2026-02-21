@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     Box, Button, Paper, Table, TableBody, TableCell, TableContainer,
-    TableHead, TableRow, TextField, Typography, MenuItem, Grid
+    TableHead, TableRow, TextField, Typography, MenuItem, Grid, Autocomplete
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { addItem, receivePO } from '../api/purchaseOrdersApi'; // assuming these exist
@@ -28,8 +28,9 @@ export default function PurchaseOrderDetails() {
             const res = await api.get(`/purchase-orders/${id}`);
             setPo(res.data);
 
-            const pRes = await getProducts();
-            setProducts(Array.isArray(pRes.data) ? pRes.data : []);
+            const pRes = await getProducts({ size: 1000 });
+            const pData = pRes.data || pRes;
+            setProducts(Array.isArray(pData) ? pData : (pData.content || []));
         } catch (e) {
             console.error(e);
             navigate('/purchase-orders');
@@ -88,49 +89,64 @@ export default function PurchaseOrderDetails() {
                     <Grid item xs={12}>
                         <DashboardCard title="Add Item to PO" subtitle="Select products to order">
                             <Grid container spacing={2} alignItems="center">
-                                <Grid item xs={12} md={5}>
-                                    <TextField
-                                        select
+                                <Grid item xs={12} md={8}>
+                                    <Autocomplete
                                         fullWidth
-                                        label="Product"
-                                        value={itemData.productId}
-                                        onChange={(e) => setItemData({ ...itemData, productId: e.target.value })}
-                                        sx={{ minWidth: 200 }}
-                                    >
-                                        {products.map(p => (
-                                            <MenuItem key={p.id} value={p.id}>
-                                                {p.name} (Cur Qty: {p.unitQty})
-                                            </MenuItem>
-                                        ))}
-                                    </TextField>
+                                        options={products}
+                                        getOptionLabel={(p) => `${p.name} (Stock: ${p.unitQty}) - Purchase: ₹${p.purchasePrice || 0} / Sale: ₹${p.unitPrice || 0}`}
+                                        value={products.find(p => p.id === itemData.productId) || null}
+                                        onChange={(e, newVal) => {
+                                            if (newVal) {
+                                                const cost = newVal.purchasePrice > 0 ? newVal.purchasePrice : (newVal.unitPrice || 0);
+                                                setItemData({
+                                                    ...itemData,
+                                                    productId: newVal.id,
+                                                    unitCost: parseFloat(cost)
+                                                });
+                                            } else {
+                                                setItemData({ ...itemData, productId: '', unitCost: 0 });
+                                            }
+                                        }}
+                                        renderInput={(params) => (
+                                            <TextField
+                                                {...params}
+                                                label="Select Product"
+                                                required
+                                                placeholder="Type to search..."
+                                            />
+                                        )}
+                                        autoHighlight
+                                    />
                                 </Grid>
-                                <Grid item xs={6} md={2}>
+                                <Grid item xs={6} md={1.5}>
                                     <TextField
                                         fullWidth
                                         type="number"
                                         label="Qty"
                                         value={itemData.qty}
-                                        onChange={(e) => setItemData({ ...itemData, qty: parseInt(e.target.value) })}
+                                        onChange={(e) => setItemData({ ...itemData, qty: parseInt(e.target.value) || 1 })}
                                     />
                                 </Grid>
-                                <Grid item xs={6} md={3}>
+                                <Grid item xs={6} md={2.5}>
                                     <TextField
                                         fullWidth
                                         type="number"
                                         label="Unit Cost"
                                         value={itemData.unitCost}
-                                        onChange={(e) => setItemData({ ...itemData, unitCost: parseFloat(e.target.value) })}
+                                        onChange={(e) => setItemData({ ...itemData, unitCost: parseFloat(e.target.value) || 0 })}
+                                        InputProps={{
+                                            startAdornment: <span>₹</span>
+                                        }}
                                     />
                                 </Grid>
-                                <Grid item xs={12} md={2}>
+                                <Grid item xs={12} md={12} sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
                                     <Button
-                                        fullWidth
                                         variant="contained"
                                         size="large"
                                         onClick={handleAddItem}
-                                        sx={{ height: 56 }}
+                                        sx={{ height: 56, px: 6 }}
                                     >
-                                        Add
+                                        Add to List
                                     </Button>
                                 </Grid>
                             </Grid>

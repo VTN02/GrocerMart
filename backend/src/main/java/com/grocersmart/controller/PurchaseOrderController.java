@@ -23,10 +23,21 @@ public class PurchaseOrderController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PurchaseOrderDto>>> getAllPOs(@RequestParam(required = false) Long id) {
+    public ResponseEntity<ApiResponse<List<PurchaseOrderDto>>> getAllPOs(@RequestParam(required = false) Long id,
+            @RequestParam(required = false) String publicId) {
         if (id != null) {
             try {
                 PurchaseOrderDto po = poService.getPOById(id);
+                return ResponseEntity.ok(ApiResponse.success(java.util.Collections.singletonList(po),
+                        "Purchase Order retrieved successfully"));
+            } catch (jakarta.persistence.EntityNotFoundException e) {
+                return ResponseEntity
+                        .ok(ApiResponse.success(java.util.Collections.emptyList(), "Purchase Order not found"));
+            }
+        }
+        if (publicId != null) {
+            try {
+                PurchaseOrderDto po = poService.getPOByPublicId(publicId);
                 return ResponseEntity.ok(ApiResponse.success(java.util.Collections.singletonList(po),
                         "Purchase Order retrieved successfully"));
             } catch (jakarta.persistence.EntityNotFoundException e) {
@@ -43,8 +54,18 @@ public class PurchaseOrderController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<PurchaseOrderDto>> searchPO(@RequestParam Long id) {
-        return ResponseEntity.ok(ApiResponse.success(poService.getPOById(id), "Purchase Order found"));
+    public ResponseEntity<ApiResponse<PurchaseOrderDto>> searchPO(@RequestParam(required = false) Long id,
+            @RequestParam(required = false) String publicId) {
+        PurchaseOrderDto dto = null;
+        if (id != null) {
+            dto = poService.getPOById(id);
+        } else if (publicId != null) {
+            dto = poService.getPOByPublicId(publicId);
+        }
+        if (dto == null) {
+            throw new jakarta.persistence.EntityNotFoundException("Purchase Order not found");
+        }
+        return ResponseEntity.ok(ApiResponse.success(dto, "Purchase Order found"));
     }
 
     @PostMapping("/{id}/items")
@@ -63,5 +84,11 @@ public class PurchaseOrderController {
     public ResponseEntity<ApiResponse<PurchaseOrderDto>> receivePO(@PathVariable Long id) {
         PurchaseOrderDto received = poService.receivePO(id);
         return ResponseEntity.ok(ApiResponse.success(received, "Purchase Order received successfully"));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePO(@PathVariable Long id) {
+        poService.deletePO(id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Purchase Order deleted successfully"));
     }
 }

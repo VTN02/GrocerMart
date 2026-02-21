@@ -70,3 +70,18 @@ export const useDeleteSupplierPermanent = () => useMutation(api.deleteSupplierPe
 export const useDeletedCustomers = () => useFetch(api.getDeletedCustomers);
 export const useRestoreCustomer = () => useMutation(api.restoreCustomer, 'creditCustomerRestored');
 export const useDeleteCustomerPermanent = () => useMutation(api.deleteCustomerPermanent);
+
+// Orders
+export const useDeletedOrders = () => useFetch(api.getDeletedOrders);
+export const useRestoreOrder = () => useMutation(api.restoreOrder, 'orderRestored');
+export const useDeleteOrderPermanent = () => useMutation(api.deleteOrderPermanent);
+
+// Sales
+export const useDeletedSales = () => useFetch(api.getDeletedSales);
+export const useRestoreSale = () => useMutation(api.restoreSale, 'saleRestored');
+export const useDeleteSalePermanent = () => useMutation(api.deleteSalePermanent);
+
+// Cheques
+export const useDeletedCheques = () => useFetch(api.getDeletedCheques);
+export const useRestoreCheque = () => useMutation(api.restoreCheque, 'chequeRestored');
+export const useDeleteChequePermanent = () => useMutation(api.deleteChequePermanent);

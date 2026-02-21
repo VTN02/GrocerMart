@@ -23,11 +23,37 @@ public class CreditPayment {
     private LocalDateTime paymentDate = LocalDateTime.now();
     private String note;
 
+    @Column(name = "public_id", length = 20)
+    private String publicId;
+
+    @Column(name = "invoice_id")
+    private Long invoiceId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", columnDefinition = "VARCHAR(20) DEFAULT 'CASH'")
+    private PaymentMethod method = PaymentMethod.CASH;
+
+    @Enumerated(EnumType.STRING)
+    private Status status = Status.SUCCESS;
+
+    @Column(name = "is_deleted")
+    private Boolean isDeleted = false;
+    private LocalDateTime deletedAt;
+    private String deletedBy;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+    }
+
+    public enum PaymentMethod {
+        CASH, CHEQUE, BANK
+    }
+
+    public enum Status {
+        SUCCESS, PENDING, BOUNCED
     }
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     Box, Button, IconButton, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, TextField, Typography, MenuItem, Grid
+    TableContainer, TableHead, TableRow, TextField, Typography, MenuItem, Grid, Autocomplete
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getOrder, addOrderItem, confirmOrder } from '../api/ordersApi';
@@ -9,21 +9,33 @@ import { getProducts } from '../api/productsApi';
 import { toast } from 'react-toastify';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckIcon from '@mui/icons-material/Check';
+import { getCustomerBalance } from '../api/creditCustomersApi';
+import { getInvoicePdf, downloadBlob } from '../api/reportsApi';
 import { PageHeader, StatusChip, DashboardCard, AnimatedContainer } from '../components';
+import { PictureAsPdf } from '@mui/icons-material';
 
 export default function OrderDetails() {
     const { id } = useParams();
     const navigate = useNavigate();
     const [order, setOrder] = useState(null);
     const [products, setProducts] = useState([]);
+    const [customerBalance, setCustomerBalance] = useState(null);
     const [itemData, setItemData] = useState({ productId: '', qty: 1, unitPrice: 0 });
 
     const fetchData = async () => {
         try {
             const oRes = await getOrder(id);
-            setOrder(oRes.data);
-            const pRes = await getProducts();
-            setProducts(Array.isArray(pRes.data) ? pRes.data : []);
+            const currentOrder = oRes.data;
+            setOrder(currentOrder);
+
+            if (currentOrder.paymentType === 'CREDIT' && currentOrder.creditCustomerId) {
+                const bRes = await getCustomerBalance(currentOrder.creditCustomerId);
+                setCustomerBalance(bRes.data);
+            }
+
+            const pRes = await getProducts({ size: 1000 });
+            const pData = pRes.data || pRes;
+            setProducts(Array.isArray(pData) ? pData : (pData.content || []));
         } catch (e) { console.error(e); }
     };
 
@@ -43,7 +55,26 @@ export default function OrderDetails() {
             await confirmOrder(id);
             toast.success("Order Confirmed");
             fetchData();
-        } catch (e) { toast.error("Error confirming order"); }
+        } catch (e) {
+            const msg = e.response?.data?.message || "Error confirming order";
+            toast.error(msg);
+        }
+    };
+
+    const handleDownloadInvoice = async () => {
+        try {
+            const res = await getInvoicePdf(id);
+            downloadBlob(res.data, `Invoice_${order.invoiceNo}.pdf`);
+            toast.success("Invoice downloaded");
+        } catch (e) {
+            toast.error("Download failed");
+        }
+    };
+
+    const isLimitExceeded = () => {
+        if (!order || order.paymentType !== 'CREDIT' || !customerBalance) return false;
+        const total = order.totalAmount || 0;
+        return total > customerBalance.availableCredit;
     };
 
     if (!order) return <Typography>Loading...</Typography>;
@@ -60,38 +91,76 @@ export default function OrderDetails() {
                 actions={
                     <Box display="flex" gap={2} alignItems="center">
                         <StatusChip status={order.status} />
+                        {order.status !== 'DRAFT' && (
+                            <Button
+                                variant="outlined"
+                                startIcon={<PictureAsPdf />}
+                                onClick={handleDownloadInvoice}
+                            >
+                                Print Invoice
+                            </Button>
+                        )}
                         {order.status === 'DRAFT' && (
                             <Button
                                 variant="contained"
                                 color="success"
                                 startIcon={<CheckIcon />}
                                 onClick={handleConfirm}
+                                disabled={isLimitExceeded()}
                             >
-                                Confirm Order
+                                {isLimitExceeded() ? "Limit Exceeded" : "Confirm Order"}
                             </Button>
                         )}
                     </Box>
                 }
             />
 
+            {order.paymentType === 'CREDIT' && customerBalance && (
+                <Box mb={3}>
+                    <DashboardCard title="Credit Info" sx={{ bgcolor: 'action.hover' }}>
+                        <Grid container spacing={2}>
+                            <Grid item xs={4}>
+                                <Typography variant="caption" color="text.secondary">Customer</Typography>
+                                <Typography variant="body1" fontWeight={600}>{order.creditCustomerName}</Typography>
+                            </Grid>
+                            <Grid item xs={4}>
+                                <Typography variant="caption" color="text.secondary">Credit Limit</Typography>
+                                <Typography variant="body1" fontWeight={600}>₹{(customerBalance.creditLimit || 0).toFixed(2)}</Typography>
+                            </Grid>
+                            <Grid item xs={4}>
+                                <Typography variant="caption" color="text.secondary">Available Credit</Typography>
+                                <Typography variant="body1" fontWeight={600} color={isLimitExceeded() ? 'error.main' : 'success.main'}>
+                                    ₹{(customerBalance.availableCredit || 0).toFixed(2)}
+                                </Typography>
+                            </Grid>
+                        </Grid>
+                    </DashboardCard>
+                </Box>
+            )}
+
             <Grid container spacing={3}>
                 {order.status === 'DRAFT' && (
                     <Grid item xs={12}>
                         <DashboardCard title="Add Item" subtitle="Add products to this order">
                             <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
-                                <TextField
-                                    select
-                                    label="Product"
-                                    value={itemData.productId}
-                                    onChange={(e) => setItemData({ ...itemData, productId: e.target.value })}
-                                    sx={{ minWidth: 200, flexGrow: 1 }}
-                                >
-                                    {products.map(p => (
-                                        <MenuItem key={p.id} value={p.id}>
-                                            {p.name} (Qty: {p.unitQty})
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
+                                <Autocomplete
+                                    fullWidth
+                                    options={products}
+                                    getOptionLabel={(p) => `${p.name} (Stock: ${p.unitQty}) - ₹${p.unitPrice}`}
+                                    value={products.find(p => p.id === itemData.productId) || null}
+                                    onChange={(e, newVal) => {
+                                        setItemData({
+                                            ...itemData,
+                                            productId: newVal ? newVal.id : '',
+                                            unitPrice: newVal ? newVal.unitPrice : 0
+                                        });
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField {...params} label="Product" required />
+                                    )}
+                                    sx={{ minWidth: 400, flexGrow: 1 }}
+                                    autoHighlight
+                                />
                                 <TextField
                                     type="number"
                                     label="Qty"
@@ -136,8 +205,8 @@ export default function OrderDetails() {
                                         <TableRow key={item.id}>
                                             <TableCell>{products.find(p => p.id === item.productId)?.name || item.productId}</TableCell>
                                             <TableCell align="right">{item.qty}</TableCell>
-                                            <TableCell align="right">{item.unitPrice.toFixed(2)}</TableCell>
-                                            <TableCell align="right">{item.lineTotal.toFixed(2)}</TableCell>
+                                            <TableCell align="right">{(item.unitPrice || 0).toFixed(2)}</TableCell>
+                                            <TableCell align="right">{(item.lineTotal || 0).toFixed(2)}</TableCell>
                                         </TableRow>
                                     ))}
                                     <TableRow>

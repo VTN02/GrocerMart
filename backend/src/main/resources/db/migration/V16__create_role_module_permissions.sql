@@ -1,0 +1,21 @@
+CREATE TABLE role_module_permission (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    role VARCHAR(20) NOT NULL,
+    module_key VARCHAR(50) NOT NULL,
+    allowed BOOLEAN NOT NULL DEFAULT FALSE,
+    UNIQUE KEY uk_role_module (role, module_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Seed default permissions for CASHIER
+INSERT INTO role_module_permission (role, module_key, allowed) VALUES
+('CASHIER', 'DASHBOARD', TRUE),
+('CASHIER', 'PRODUCTS', FALSE),
+('CASHIER', 'INVENTORY_CONVERT', FALSE),
+('CASHIER', 'CREDIT_CUSTOMERS', FALSE),
+('CASHIER', 'CHEQUES', FALSE),
+('CASHIER', 'ORDERS', TRUE),
+('CASHIER', 'SALES', FALSE),
+('CASHIER', 'SUPPLIERS', FALSE),
+('CASHIER', 'PURCHASE_ORDERS', FALSE),
+('CASHIER', 'TRASH', FALSE),
+('CASHIER', 'REPORTS', FALSE);

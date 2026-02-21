@@ -21,6 +21,7 @@ export default function FormDialog({
     submitText = 'Save',
     cancelText = 'Cancel',
     loading = false,
+    submitDisabled = false,
     maxWidth = 'sm',
     fullWidth = true,
 }) {
@@ -70,7 +71,7 @@ export default function FormDialog({
                 <Button
                     type="submit"
                     variant="contained"
-                    disabled={loading}
+                    disabled={loading || submitDisabled}
                     sx={{ minWidth: 100 }}
                 >
                     {loading ? 'Saving...' : submitText}

@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 @Data
 public class UserDto {
     private Long id;
+    private String publicId;
 
     @NotBlank(message = "Full Name is required")
     private String fullName;
@@ -23,6 +24,9 @@ public class UserDto {
     private User.Status status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isDeleted;
+    private LocalDateTime deletedAt;
+    private String deletedBy;
 
     // For registration only (optional in response)
     @NotBlank(message = "Password is required")

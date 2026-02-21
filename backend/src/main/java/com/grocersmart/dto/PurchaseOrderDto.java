@@ -8,6 +8,7 @@ import java.util.List;
 @Data
 public class PurchaseOrderDto {
     private Long id;
+    private String publicId;
     private Long supplierId;
     private LocalDateTime poDate;
     private PurchaseOrder.Status status;

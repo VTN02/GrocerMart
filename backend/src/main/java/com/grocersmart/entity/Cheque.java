@@ -15,6 +15,9 @@ public class Cheque {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "public_id", unique = true, nullable = false, length = 20)
+    private String publicId;
+
     private String chequeNumber;
     private Long customerId;
     private String bankName;
@@ -24,6 +27,24 @@ public class Cheque {
 
     private LocalDate issueDate;
     private LocalDate dueDate;
+
+    @Column(name = "invoice_id")
+    private Long invoiceId;
+
+    private LocalDate depositDate;
+    private LocalDate clearedDate;
+    private LocalDate bouncedDate;
+
+    @Column(name = "bounce_reason")
+    private String bounceReason;
+
+    @Column(name = "migrated_to_debt")
+    private Boolean migratedToDebt = false;
+
+    @Column(name = "is_deleted")
+    private Boolean isDeleted = false;
+    private LocalDateTime deletedAt;
+    private String deletedBy;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, columnDefinition = "VARCHAR(50)")

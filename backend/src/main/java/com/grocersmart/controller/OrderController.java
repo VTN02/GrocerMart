@@ -23,17 +23,51 @@ public class OrderController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<OrderDto>>> getAllOrders(@RequestParam(required = false) Long id) {
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<OrderDto>>> getOrders(
+            @RequestParam(required = false) Long id,
+            @RequestParam(required = false) String publicId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) com.grocersmart.entity.Order.Status status,
+            @RequestParam(required = false) com.grocersmart.entity.Order.PaymentType paymentType,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id,desc") String sort) {
+
+        String[] sortParts = sort.split(",");
+        org.springframework.data.domain.Sort sortObj = sortParts.length > 1 && sortParts[1].equalsIgnoreCase("desc")
+                ? org.springframework.data.domain.Sort.by(sortParts[0]).descending()
+                : org.springframework.data.domain.Sort.by(sortParts[0]).ascending();
+
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size,
+                sortObj);
+
         if (id != null) {
             try {
                 OrderDto order = orderService.getOrderById(id);
-                return ResponseEntity.ok(ApiResponse.success(java.util.Collections.singletonList(order),
+                return ResponseEntity.ok(ApiResponse.success(
+                        new org.springframework.data.domain.PageImpl<>(java.util.Collections.singletonList(order),
+                                pageable, 1),
                         "Order retrieved successfully"));
             } catch (jakarta.persistence.EntityNotFoundException e) {
-                return ResponseEntity.ok(ApiResponse.success(java.util.Collections.emptyList(), "Order not found"));
+                return ResponseEntity.ok(
+                        ApiResponse.success(org.springframework.data.domain.Page.empty(pageable), "Order not found"));
             }
         }
-        return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders(), "Orders retrieved successfully"));
+        if (publicId != null) {
+            try {
+                OrderDto order = orderService.getOrderByPublicId(publicId);
+                return ResponseEntity.ok(ApiResponse.success(
+                        new org.springframework.data.domain.PageImpl<>(java.util.Collections.singletonList(order),
+                                pageable, 1),
+                        "Order retrieved successfully"));
+            } catch (jakarta.persistence.EntityNotFoundException e) {
+                return ResponseEntity.ok(
+                        ApiResponse.success(org.springframework.data.domain.Page.empty(pageable), "Order not found"));
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.success(
+                orderService.getOrders(search, status, paymentType, pageable),
+                "Orders retrieved successfully"));
     }
 
     @GetMapping("/{id}")
@@ -42,8 +76,18 @@ public class OrderController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<OrderDto>> searchOrder(@RequestParam Long id) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.getOrderById(id), "Order found"));
+    public ResponseEntity<ApiResponse<OrderDto>> searchOrder(@RequestParam(required = false) Long id,
+            @RequestParam(required = false) String publicId) {
+        OrderDto order = null;
+        if (id != null) {
+            order = orderService.getOrderById(id);
+        } else if (publicId != null) {
+            order = orderService.getOrderByPublicId(publicId);
+        }
+        if (order == null) {
+            throw new jakarta.persistence.EntityNotFoundException("Order not found");
+        }
+        return ResponseEntity.ok(ApiResponse.success(order, "Order found"));
     }
 
     @DeleteMapping("/{id}")

@@ -24,22 +24,20 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final StockConversionRepository stockConversionRepository;
     private final TrashProductService trashProductService;
+    private final PublicIdGeneratorService publicIdGeneratorService;
 
     public ProductDto createProduct(ProductDto dto) {
         Product product = new Product();
         mapToEntity(dto, product);
         product.setStatus(Product.Status.ACTIVE);
+        product.setPublicId(publicIdGeneratorService.nextId(com.grocersmart.common.EntityType.PRODUCT));
         return mapToDto(productRepository.save(product));
     }
 
-    public Page<ProductDto> getProducts(String category, Product.Status status, Pageable pageable) {
-        // Default to ACTIVE if status is null or not provided
-        Product.Status filterStatus = (status != null) ? status : Product.Status.ACTIVE;
-
-        if (category != null && !category.isEmpty()) {
-            return productRepository.findByCategoryAndStatus(category, filterStatus, pageable).map(this::mapToDto);
-        }
-        return productRepository.findByStatus(filterStatus, pageable).map(this::mapToDto);
+    public Page<ProductDto> getProducts(String search, String category, Product.Status status, Pageable pageable) {
+        return productRepository.findAll(
+                com.grocersmart.specification.ProductSpecification.filterBy(search, category, status),
+                pageable).map(this::mapToDto);
     }
 
     public List<ProductDto> getAllProducts() {
@@ -52,6 +50,12 @@ public class ProductService {
         return productRepository.findById(id)
                 .map(this::mapToDto)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+    }
+
+    public ProductDto getProductByPublicId(String publicId) {
+        return productRepository.findByPublicId(publicId)
+                .map(this::mapToDto)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found with publicId: " + publicId));
     }
 
     public ProductDto updateProduct(Long id, ProductDto dto) {
@@ -97,10 +101,13 @@ public class ProductService {
         dto.setBulkQty(p.getBulkQty());
         dto.setUnitQty(p.getUnitQty());
         dto.setReorderLevel(p.getReorderLevel());
+        dto.setUnitsPerBulk(p.getUnitsPerBulk());
         dto.setUnitPrice(p.getUnitPrice());
         dto.setBulkPrice(p.getBulkPrice());
         dto.setPurchasePrice(p.getPurchasePrice());
         dto.setStatus(p.getStatus());
+        dto.setStatus(p.getStatus());
+        dto.setPublicId(p.getPublicId());
         dto.setCreatedAt(p.getCreatedAt());
         dto.setUpdatedAt(p.getUpdatedAt());
         return dto;
@@ -123,5 +130,7 @@ public class ProductService {
             p.setPurchasePrice(dto.getPurchasePrice());
         if (dto.getReorderLevel() != null)
             p.setReorderLevel(dto.getReorderLevel());
+        if (dto.getUnitsPerBulk() != null)
+            p.setUnitsPerBulk(dto.getUnitsPerBulk());
     }
 }

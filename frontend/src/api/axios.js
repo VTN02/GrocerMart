@@ -29,12 +29,7 @@ api.interceptors.response.use(
             'data' in response.data;
 
         if (isWrapped) {
-            let unwrappedData = response.data.data;
-
-            // Handle Spring Data Page object compatibility
-            if (unwrappedData && typeof unwrappedData === 'object' && 'content' in unwrappedData && Array.isArray(unwrappedData.content)) {
-                unwrappedData = unwrappedData.content;
-            }
+            const unwrappedData = response.data.data;
 
             // Toast success message if provided and not a GET/OPTIONS request
             const method = response.config.method?.toLowerCase();
@@ -67,13 +62,16 @@ api.interceptors.response.use(
             message = error.message;
         }
 
-        // Handle 401 Unauthorized
+        // Handle 401 Unauthorized (Expired or Invalid token)
         if (error.response?.status === 401 && !error.config.url.includes('/auth/login')) {
             localStorage.clear();
             // Using window.location.href for immediate redirect
             if (window.location.pathname !== '/login') {
                 window.location.href = '/login';
             }
+        } else if (error.response?.status === 403) {
+            // 403 Forbidden - Just show message, don't logout
+            toast.warning("You don't have permission to perform this action.");
         } else if (error.response?.status !== 401) {
             toast.error(message);
         }

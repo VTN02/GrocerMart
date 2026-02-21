@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Button, TextField, IconButton, Tooltip, Grid, Paper, FormControlLabel, Switch, MenuItem } from '@mui/material';
-import { Add, Delete, Edit } from '@mui/icons-material';
-import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../api/suppliersApi';
+import React, { useState, useMemo } from 'react';
+import { Box, Button, TextField, IconButton, Tooltip, Grid, Stack, InputAdornment, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { Add, Delete, Edit, Visibility, PictureAsPdf, Search, CleaningServices, LocalShipping, CheckCircle, Cancel } from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getSuppliers, createSupplier, updateSupplier, deleteSupplier, getSuppliersSummary } from '../api/suppliersApi';
+import { getSupplierPurchaseHistoryPdf, getSupplierProfilePdf, getSupplierListReportPdf, downloadBlob } from '../api/reportsApi';
 import { toast } from 'react-toastify';
-import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip, DashboardCard, AnimatedContainer } from '../components';
+import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip, DashboardCard, AnimatedContainer, GenericDetailsDialog, KpiCard } from '../components';
 
 const initialFormData = {
     name: '',
@@ -14,37 +16,70 @@ const initialFormData = {
 };
 
 export default function Suppliers() {
-    const [suppliers, setSuppliers] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+
+    // Table & Filter State
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('ACTIVE');
+    const [orderBy, setOrderBy] = useState('id');
+    const [orderDirection, setOrderDirection] = useState('desc');
+
+    // Dialog State
     const [dialogOpen, setDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [selectedSupplier, setSelectedSupplier] = useState(null);
     const [deleteId, setDeleteId] = useState(null);
     const [editId, setEditId] = useState(null);
     const [formData, setFormData] = useState(initialFormData);
-    const [submitting, setSubmitting] = useState(false);
-    const [searchId, setSearchId] = useState('');
-    const [showArchived, setShowArchived] = useState(false);
 
-    const fetchSuppliers = async () => {
-        setLoading(true);
-        try {
-            const { data } = await getSuppliers({
-                id: searchId || undefined,
-                status: showArchived ? 'INACTIVE' : 'ACTIVE'
-            });
-            setSuppliers(Array.isArray(data) ? data : [data]);
-        } catch (e) {
-            console.error(e);
-            setSuppliers([]);
-        } finally {
-            setLoading(false);
+    // Data Fetching
+    const { data, isLoading } = useQuery({
+        queryKey: ['suppliers', page, rowsPerPage, search, statusFilter, orderBy, orderDirection],
+        queryFn: async () => {
+            const params = {
+                page,
+                size: rowsPerPage,
+                search: search || undefined,
+                status: statusFilter === 'ALL' ? undefined : statusFilter,
+                sort: `${orderBy},${orderDirection}`
+            };
+            const response = await getSuppliers(params);
+            return response.data || response;
+        },
+        keepPreviousData: true
+    });
+
+    const { data: summaryData, isLoading: summaryLoading } = useQuery({
+        queryKey: ['suppliers', 'summary'],
+        queryFn: async () => {
+            const res = await getSuppliersSummary();
+            return res.data || res;
+        }
+    });
+
+    const suppliers = data?.content || [];
+    const totalCount = data?.totalElements || 0;
+
+    // Mutations
+    const mutationOptions = {
+        onSuccess: () => {
+            queryClient.invalidateQueries(['suppliers']);
+            setDialogOpen(false);
+            setDeleteDialogOpen(false);
+        },
+        onError: (error) => {
+            toast.error(error.response?.data?.message || 'Operation failed');
         }
     };
 
-    useEffect(() => {
-        fetchSuppliers();
-    }, [searchId, showArchived]);
+    const createMutation = useMutation({ mutationFn: createSupplier, ...mutationOptions, onSuccess: () => { toast.success('Supplier created'); mutationOptions.onSuccess(); } });
+    const updateMutation = useMutation({ mutationFn: (data) => updateSupplier(editId || data.id, data), ...mutationOptions, onSuccess: () => { toast.success('Supplier updated'); mutationOptions.onSuccess(); } });
+    const deleteMutation = useMutation({ mutationFn: deleteSupplier, ...mutationOptions, onSuccess: () => { toast.success('Supplier deleted'); mutationOptions.onSuccess(); } });
 
+    // Handlers
     const handleOpenDialog = (supplier = null) => {
         if (supplier) {
             setEditId(supplier.id);
@@ -62,288 +97,130 @@ export default function Suppliers() {
         setDialogOpen(true);
     };
 
-    const handleCloseDialog = () => {
-        setDialogOpen(false);
-        setEditId(null);
-        setFormData(initialFormData);
-    };
-
-    const handleSubmit = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        setSubmitting(true);
+        if (editId) updateMutation.mutate(formData);
+        else createMutation.mutate(formData);
+    };
 
+    const handleSort = (property) => {
+        const isAsc = orderBy === property && orderDirection === 'asc';
+        setOrderDirection(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
+    };
+
+    const handleDownloadPurchaseHistory = async (supplier) => {
         try {
-            if (editId) {
-                await updateSupplier(editId, formData);
-                toast.success('Supplier updated successfully');
-            } else {
-                await createSupplier(formData);
-                toast.success('Supplier created successfully');
-            }
-            handleCloseDialog();
-            fetchSuppliers();
-        } catch (e) {
-            console.error(e);
-            toast.error('Operation failed');
-        } finally {
-            setSubmitting(false);
-        }
+            const { data } = await getSupplierPurchaseHistoryPdf(supplier.id);
+            downloadBlob(data, `Purchase_History_${supplier.name}.pdf`);
+            toast.success("Report downloaded");
+        } catch (e) { toast.error("Download failed"); }
     };
 
-    const handleOpenDeleteDialog = (id) => {
-        setDeleteId(id);
-        setDeleteDialogOpen(true);
-    };
-
-    const handleDelete = async () => {
-        setSubmitting(true);
+    const handleDownloadProfile = async (supplier) => {
         try {
-            await deleteSupplier(deleteId);
-            toast.success('Supplier deleted successfully');
-            setDeleteDialogOpen(false);
-            setDeleteId(null);
-            fetchSuppliers();
-        } catch (e) {
-            console.error(e);
-            toast.error('Delete failed');
-        } finally {
-            setSubmitting(false);
-        }
+            const { data } = await getSupplierProfilePdf(supplier.id);
+            downloadBlob(data, `Profile_${supplier.name}.pdf`);
+            toast.success("Profile downloaded");
+        } catch (e) { toast.error("Download failed"); }
     };
 
-    const handleToggleStatus = async (supplier) => {
-        setSubmitting(true);
+    const handleExportAll = async () => {
         try {
-            const nextStatus = supplier.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-            await updateSupplier(supplier.id, {
-                name: supplier.name,
-                phone: supplier.phone || '',
-                address: supplier.address || '',
-                email: supplier.email || '',
-                status: nextStatus,
-            });
-            toast.success(nextStatus === 'ACTIVE' ? 'Supplier activated' : 'Supplier deactivated');
-            fetchSuppliers();
-        } catch (e) {
-            console.error(e);
-            toast.error('Status update failed');
-        } finally {
-            setSubmitting(false);
-        }
+            const { data } = await getSupplierListReportPdf();
+            downloadBlob(data, `Suppliers_List.pdf`);
+            toast.success("Report downloaded");
+        } catch (e) { toast.error("Export failed"); }
     };
 
-    const columns = [
-        { id: 'id', label: 'ID', minWidth: 60 },
-        { id: 'name', label: 'Supplier Name', minWidth: 180 },
-        { id: 'phone', label: 'Phone', minWidth: 120 },
-        { id: 'address', label: 'Address', minWidth: 180 },
-        { id: 'email', label: 'Email', minWidth: 150 },
-        {
-            id: 'activeToggle',
-            label: 'Active',
-            minWidth: 90,
-            render: (_val, row) => (
-                <Switch
-                    checked={row.status === 'ACTIVE'}
-                    onChange={() => handleToggleStatus(row)}
-                    disabled={submitting}
-                    color="success"
-                    size="small"
-                />
-            )
-        },
-        {
-            id: 'status',
-            label: 'Status',
-            minWidth: 100,
-            render: (val) => <StatusChip status={val} />
-        },
-        {
-            id: 'createdAt',
-            label: 'Created At',
-            minWidth: 150,
-            render: (val) => val ? new Date(val).toLocaleString() : '—'
-        },
-        {
-            id: 'updatedAt',
-            label: 'Updated At',
-            minWidth: 150,
-            render: (val) => val ? new Date(val).toLocaleString() : '—'
-        },
-    ];
+    const columns = useMemo(() => [
+        { id: 'publicId', label: 'ID', minWidth: 90, sortable: true },
+        { id: 'name', label: 'Supplier Name', minWidth: 180, sortable: true },
+        { id: 'phone', label: 'Phone', minWidth: 120, sortable: true },
+        { id: 'address', label: 'Address', minWidth: 200, sortable: true },
+        { id: 'email', label: 'Email', minWidth: 150, sortable: true },
+        { id: 'status', label: 'Status', minWidth: 100, sortable: true, render: (val) => <StatusChip status={val} /> }
+    ], []);
 
     return (
-        <AnimatedContainer delay={0.1}>
+        <AnimatedContainer>
             <PageHeader
-                title="Suppliers"
-                subtitle="Manage vendors and suppliers"
+                title="Suppliers" subtitle="Manage vendors and suppliers"
                 breadcrumbs={[{ label: 'Suppliers', path: '/suppliers' }]}
                 actions={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={() => handleOpenDialog()}
-                    >
-                        Add Supplier
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                        <Button variant="outlined" startIcon={<PictureAsPdf />} onClick={handleExportAll}>Export PDF</Button>
+                        <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenDialog()}>Add Supplier</Button>
+                    </Stack>
                 }
             />
 
-            <DashboardCard title="Supplier List" subtitle="Manage your vendor relationships">
-                {/* Filter Bar */}
-                <Box mb={3} display="flex" gap={2} alignItems="center">
+            <Grid container spacing={3} mb={4}>
+                <Grid item xs={12} sm={4}><KpiCard title="Total Suppliers" value={summaryData?.total || 0} icon={LocalShipping} color="primary" loading={summaryLoading} /></Grid>
+                <Grid item xs={12} sm={4}><KpiCard title="Active Suppliers" value={summaryData?.active || 0} icon={CheckCircle} color="success" loading={summaryLoading} /></Grid>
+                <Grid item xs={12} sm={4}><KpiCard title="Inactive Suppliers" value={summaryData?.inactive || 0} icon={Cancel} color="warning" loading={summaryLoading} /></Grid>
+            </Grid>
+
+            <DashboardCard title="Supplier List">
+                <Box mb={3} display="flex" justifyContent="space-between" alignItems="center" gap={2} flexWrap="wrap">
                     <TextField
-                        size="small"
-                        label="Search by Supplier ID"
-                        type="number"
-                        placeholder="Enter ID"
-                        value={searchId}
-                        onChange={(e) => setSearchId(e.target.value)}
-                        sx={{ width: 250 }}
+                        size="small" label="Search" placeholder="Name, Phone, ID" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                        sx={{ minWidth: 250 }} InputProps={{ startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> }}
                     />
-                    {searchId && (
-                        <Button
-                            color="inherit"
-                            onClick={() => setSearchId('')}
-                        >
-                            Clear
-                        </Button>
-                    )}
-
-                    <Box flexGrow={1} />
-
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                checked={showArchived}
-                                onChange={(e) => setShowArchived(e.target.checked)}
-                                color="warning"
-                            />
-                        }
-                        label="Show Inactive"
-                    />
+                    <Stack direction="row" spacing={2} alignItems="center">
+                        <ToggleButtonGroup value={statusFilter} exclusive onChange={(e, v) => v && setStatusFilter(v)} size="small" color="primary">
+                            <ToggleButton value="ACTIVE">Active</ToggleButton>
+                            <ToggleButton value="INACTIVE">Inactive</ToggleButton>
+                            <ToggleButton value="ALL">All</ToggleButton>
+                        </ToggleButtonGroup>
+                        <Button startIcon={<CleaningServices />} onClick={() => { setSearch(''); setStatusFilter('ACTIVE'); setPage(0); }}>Clear</Button>
+                    </Stack>
                 </Box>
 
                 <DataTable
-                    columns={columns}
-                    data={suppliers}
-                    searchKey="name"
-                    loading={loading}
-                    emptyTitle="No suppliers found"
-                    emptyDescription="Start by adding your first supplier."
-                    emptyAction={
-                        <Button
-                            variant="contained"
-                            startIcon={<Add />}
-                            onClick={handleOpenDialog}
-                        >
-                            Add First Supplier
-                        </Button>
-                    }
+                    serverSide columns={columns} data={suppliers} loading={isLoading}
+                    totalCount={totalCount} page={page} rowsPerPage={rowsPerPage}
+                    onPageChange={setPage} onRowsPerPageChange={setRowsPerPage}
+                    orderBy={orderBy} orderDirection={orderDirection} onSortChange={handleSort}
                     actions={(row) => (
-                        <>
-                            <Tooltip title="Edit">
-                                <IconButton
-                                    size="small"
-                                    onClick={() => handleOpenDialog(row)}
-                                >
-                                    <Edit fontSize="small" />
+                        <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="View"><IconButton size="small" color="info" onClick={() => { setSelectedSupplier(row); setDetailsOpen(true); }}><Visibility fontSize="small" /></IconButton></Tooltip>
+                            <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpenDialog(row)}><Edit fontSize="small" /></IconButton></Tooltip>
+                            <Tooltip title="Print Profile">
+                                <IconButton size="small" color="primary" onClick={() => handleDownloadProfile(row)}>
+                                    <PictureAsPdf fontSize="small" />
                                 </IconButton>
                             </Tooltip>
-                            <Tooltip title="Delete">
-                                <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleOpenDeleteDialog(row.id)}
-                                >
-                                    <Delete fontSize="small" />
+                            <Tooltip title="Purchase History">
+                                <IconButton size="small" color="secondary" onClick={() => handleDownloadPurchaseHistory(row)}>
+                                    <LocalShipping fontSize="small" />
                                 </IconButton>
                             </Tooltip>
-                        </>
+                            <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => { setDeleteId(row.id); setDeleteDialogOpen(true); }}><Delete fontSize="small" /></IconButton></Tooltip>
+                        </Stack>
                     )}
                 />
             </DashboardCard>
 
-            {/* Create Dialog */}
-            <FormDialog
-                open={dialogOpen}
-                onClose={handleCloseDialog}
-                onSubmit={handleSubmit}
-                title={editId ? "Edit Supplier" : "Add New Supplier"}
-                subtitle={editId ? "Update supplier details" : "Enter supplier details"}
-                loading={submitting}
-                maxWidth="sm"
-            >
+            <FormDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={handleSubmit} title={editId ? "Edit Supplier" : "Add New Supplier"} loading={createMutation.isLoading || updateMutation.isLoading} maxWidth="sm">
                 <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            label="Supplier Name"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            required
-                            disabled={submitting}
-                            autoFocus
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            label="Phone"
-                            value={formData.phone}
-                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                            disabled={submitting}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            label="Email"
-                            type="email"
-                            value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            disabled={submitting}
-                        />
-                    </Grid>
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            label="Address"
-                            value={formData.address}
-                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                            disabled={submitting}
-                            multiline
-                            rows={2}
-                        />
-                    </Grid>
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            select
-                            label="Status"
-                            value={formData.status}
-                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                            required
-                            disabled={submitting}
-                        >
-                            <MenuItem value="ACTIVE">Active</MenuItem>
-                            <MenuItem value="INACTIVE">Inactive</MenuItem>
-                        </TextField>
-                    </Grid>
+                    <Grid item xs={12}><TextField fullWidth label="Supplier Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required autoFocus /></Grid>
+                    <Grid item xs={12} sm={6}><TextField fullWidth label="Phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} /></Grid>
+                    <Grid item xs={12} sm={6}><TextField fullWidth label="Email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} /></Grid>
+                    <Grid item xs={12}><TextField fullWidth label="Address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} multiline rows={2} /></Grid>
+                    {editId && (
+                        <Grid item xs={12}>
+                            <TextField fullWidth select label="Status" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} SelectProps={{ native: true }}>
+                                <option value="ACTIVE">Active</option>
+                                <option value="INACTIVE">Inactive</option>
+                            </TextField>
+                        </Grid>
+                    )}
                 </Grid>
             </FormDialog>
 
-            {/* Delete Confirmation Dialog */}
-            <ConfirmDialog
-                open={deleteDialogOpen}
-                onClose={() => setDeleteDialogOpen(false)}
-                onConfirm={handleDelete}
-                title="Delete Supplier"
-                message="Are you sure you want to delete this supplier? This action cannot be undone."
-                confirmText="Delete"
-                severity="error"
-                loading={submitting}
-            />
+            <ConfirmDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={() => deleteMutation.mutate(deleteId)} title="Delete Supplier" message="Are you sure you want to delete this supplier? This action cannot be undone." severity="error" loading={deleteMutation.isLoading} />
+            <GenericDetailsDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} data={selectedSupplier} title="Supplier Details" />
         </AnimatedContainer>
     );
 }

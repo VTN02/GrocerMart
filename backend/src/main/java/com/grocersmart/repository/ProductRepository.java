@@ -2,12 +2,12 @@ package com.grocersmart.repository;
 
 import com.grocersmart.entity.Product;
 import org.springframework.data.jpa.repository.JpaRepository;
-
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.Optional;
 
-public interface ProductRepository extends JpaRepository<Product, Long> {
+public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
     Page<Product> findByCategory(String category, Pageable pageable);
 
     java.util.Optional<Product> findByNameIgnoreCase(String name);
@@ -19,4 +19,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Page<Product> findByCategoryAndStatus(String category, Product.Status status, Pageable pageable);
 
     java.util.List<Product> findByStatus(Product.Status status);
+
+    Optional<Product> findByPublicId(String publicId);
 }

@@ -45,6 +45,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(CreditLimitExceededException.class)
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> handleCreditLimitExceeded(
+            CreditLimitExceededException ex) {
+        java.util.Map<String, Object> details = new java.util.HashMap<>();
+        details.put("creditLimit", ex.getCreditLimit());
+        details.put("currentOutstanding", ex.getCurrentOutstanding());
+        details.put("attemptedCharge", ex.getAttemptedCharge());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.<java.util.Map<String, Object>>builder()
+                .timestamp(LocalDateTime.now())
+                .success(false)
+                .message(ex.getMessage())
+                .data(details)
+                .build());
+    }
+
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)

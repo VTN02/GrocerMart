@@ -24,25 +24,37 @@ public class PurchaseOrderService {
     private final PurchaseOrderRepository poRepository;
     private final PurchaseOrderItemRepository poiRepository;
     private final ProductRepository productRepository;
+    private final TrashPurchaseOrderService trashPurchaseOrderService;
+    private final PublicIdGeneratorService publicIdGeneratorService;
 
     public PurchaseOrderDto createPO(PurchaseOrderDto dto) {
         PurchaseOrder po = new PurchaseOrder();
+        po.setPublicId(publicIdGeneratorService.nextId(com.grocersmart.common.EntityType.PURCHASE_ORDER));
         po.setSupplierId(dto.getSupplierId());
         po.setPoDate(LocalDateTime.now());
         po.setStatus(PurchaseOrder.Status.CREATED);
         return mapToDto(poRepository.save(po));
     }
 
+    @Transactional(readOnly = true)
     public List<PurchaseOrderDto> getAllPOs() {
         return poRepository.findAll().stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public PurchaseOrderDto getPOById(Long id) {
         return poRepository.findById(id)
                 .map(this::mapToDto)
                 .orElseThrow(() -> new EntityNotFoundException("PO not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public PurchaseOrderDto getPOByPublicId(String publicId) {
+        return poRepository.findByPublicId(publicId)
+                .map(this::mapToDto)
+                .orElseThrow(() -> new EntityNotFoundException("PO not found with publicId: " + publicId));
     }
 
     public PurchaseOrderItemDto addItem(Long poId, PurchaseOrderItemDto itemDto) {
@@ -91,9 +103,23 @@ public class PurchaseOrderService {
         return mapToDto(poRepository.save(po));
     }
 
+    @Transactional
+    public void deletePO(Long id) {
+        PurchaseOrder po = poRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("PO not found"));
+
+        if (po.getStatus() == PurchaseOrder.Status.RECEIVED) {
+            // Optional: Prevent deleting received POs or handle reversal
+            // For not, allow deletion but just move to trash.
+        }
+
+        trashPurchaseOrderService.moveToTrash(po);
+    }
+
     private PurchaseOrderDto mapToDto(PurchaseOrder po) {
         PurchaseOrderDto dto = new PurchaseOrderDto();
         dto.setId(po.getId());
+        dto.setPublicId(po.getPublicId());
         dto.setSupplierId(po.getSupplierId());
         dto.setPoDate(po.getPoDate());
         dto.setStatus(po.getStatus());

@@ -7,11 +7,18 @@ import java.time.LocalDate;
 @Data
 public class ChequeDto {
     private Long id;
+    private String publicId;
     private String chequeNumber;
     private Long customerId;
     private String bankName;
     private Double amount;
     private LocalDate issueDate;
+    private Long invoiceId;
+    private LocalDate depositDate;
+    private LocalDate clearedDate;
+    private LocalDate bouncedDate;
+    private String bounceReason;
+    private Boolean migratedToDebt;
     private LocalDate dueDate;
     private Cheque.Status status;
     private String note;

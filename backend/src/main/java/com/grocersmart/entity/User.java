@@ -14,6 +14,9 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "public_id", unique = true, nullable = false, length = 20)
+    private String publicId;
+
     @Column(nullable = false)
     private String fullName;
 
@@ -32,6 +35,11 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, columnDefinition = "VARCHAR(50)")
     private Status status = Status.ACTIVE;
+
+    @Column(name = "is_deleted")
+    private Boolean isDeleted = false;
+    private LocalDateTime deletedAt;
+    private String deletedBy;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

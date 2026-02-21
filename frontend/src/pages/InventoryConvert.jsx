@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, MenuItem, Paper, TextField, Typography, Grid, Alert } from '@mui/material';
+import { Box, Button, MenuItem, Paper, TextField, Typography, Grid, Alert, Autocomplete } from '@mui/material';
 import { SwapHoriz, Inventory } from '@mui/icons-material';
 import { getProducts } from '../api/productsApi';
 import { convertStock } from '../api/inventoryApi';
@@ -16,7 +16,10 @@ export default function InventoryConvert() {
     const [selectedProduct, setSelectedProduct] = useState(null);
 
     useEffect(() => {
-        getProducts({ size: 200 }).then(res => setProducts(Array.isArray(res.data) ? res.data : []));
+        getProducts({ size: 1000 }).then(res => {
+            const data = res.data || res;
+            setProducts(Array.isArray(data) ? data : (data.content || []));
+        });
     }, []);
 
     useEffect(() => {
@@ -41,8 +44,9 @@ export default function InventoryConvert() {
             setProductId('');
             setSelectedProduct(null);
             // Refresh products to show updated stock
-            const res = await getProducts({ size: 200 });
-            setProducts(res.data);
+            const res = await getProducts({ size: 1000 });
+            const data = res.data || res;
+            setProducts(Array.isArray(data) ? data : (data.content || []));
         } catch (error) {
             console.error(error);
             toast.error('Conversion failed');
@@ -67,25 +71,18 @@ export default function InventoryConvert() {
                     <Box component="form" onSubmit={handleSubmit}>
                         <Grid container spacing={3}>
                             <Grid item xs={12}>
-                                <TextField
+                                <Autocomplete
                                     fullWidth
-                                    select
-                                    label="Select Product"
-                                    value={productId}
-                                    onChange={(e) => setProductId(e.target.value)}
-                                    required
+                                    options={products}
+                                    getOptionLabel={(p) => `${p.name} — Bulk: ${p.bulkQty} | Units: ${p.unitQty}`}
+                                    value={products.find(p => p.id === productId) || null}
+                                    onChange={(e, newVal) => setProductId(newVal ? newVal.id : '')}
+                                    renderInput={(params) => (
+                                        <TextField {...params} label="Select Product" required helperText="Choose the product to convert" />
+                                    )}
                                     disabled={loading}
-                                    helperText="Choose the product to convert"
-                                >
-                                    <MenuItem value="">
-                                        <em>Select a product...</em>
-                                    </MenuItem>
-                                    {products.map(p => (
-                                        <MenuItem key={p.id} value={p.id}>
-                                            {p.name} — Bulk: {p.bulkQty} | Units: {p.unitQty}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
+                                    autoHighlight
+                                />
                             </Grid>
 
                             {selectedProduct && (

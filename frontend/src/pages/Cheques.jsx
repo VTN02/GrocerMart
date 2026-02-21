@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Button, TextField, MenuItem, IconButton, Tooltip, Grid, Paper } from '@mui/material';
-import { Add, Delete, Edit, AccountBalance } from '@mui/icons-material';
-import { getCheques, createCheque, updateCheque, updateChequeStatus, deleteCheque } from '../api/chequesApi';
-import { getCustomers } from '../api/creditCustomersApi';
+import React, { useState, useMemo } from 'react';
+import { Box, Button, TextField, MenuItem, IconButton, Tooltip, Grid, Stack, InputAdornment, ToggleButtonGroup, ToggleButton, Typography } from '@mui/material';
+import { Add, Delete, Edit, AccountBalance, Visibility, PictureAsPdf, Search, CleaningServices, History, CheckCircle, ErrorOutline, Timer } from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getCheques, createCheque, updateCheque, updateChequeStatus, deleteCheque, getChequesSummary } from '../api/chequesApi';
+import { getCreditCustomers } from '../api/creditCustomersApi';
+import { getChequeReportPdf, downloadBlob } from '../api/reportsApi';
 import { toast } from 'react-toastify';
-import { PageHeader, DataTable, FormDialog, ConfirmDialog, DashboardCard, AnimatedContainer } from '../components';
+import { PageHeader, DataTable, FormDialog, ConfirmDialog, DashboardCard, AnimatedContainer, GenericDetailsDialog, KpiCard } from '../components';
 
 const initialFormData = {
     chequeNumber: '',
@@ -18,38 +20,91 @@ const initialFormData = {
 };
 
 export default function Cheques() {
-    const [cheques, setCheques] = useState([]);
-    const [customers, setCustomers] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+
+    // Table & Filter State
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [orderBy, setOrderBy] = useState('id');
+    const [orderDirection, setOrderDirection] = useState('desc');
+
+    // Dialog State
     const [dialogOpen, setDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [selectedCheque, setSelectedCheque] = useState(null);
     const [editId, setEditId] = useState(null);
     const [deleteId, setDeleteId] = useState(null);
     const [formData, setFormData] = useState(initialFormData);
-    const [submitting, setSubmitting] = useState(false);
-    const [searchId, setSearchId] = useState('');
+    const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+    const [statusData, setStatusData] = useState({ id: null, status: '', depositDate: '', clearedDate: '', bouncedDate: '', bounceReason: '' });
 
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const [cRes, custRes] = await Promise.all([
-                getCheques(searchId ? { id: searchId } : undefined),
-                getCustomers()
-            ]);
-            setCheques(Array.isArray(cRes.data) ? cRes.data : (cRes.data ? [cRes.data] : []));
-            setCustomers(Array.isArray(custRes.data) ? custRes.data : []);
-        } catch (e) {
-            console.error(e);
-            setCheques([]);
-        } finally {
-            setLoading(false);
+    // Data Fetching
+    const { data: chequeData, isLoading } = useQuery({
+        queryKey: ['cheques', page, rowsPerPage, search, statusFilter, orderBy, orderDirection],
+        queryFn: async () => {
+            const params = {
+                page,
+                size: rowsPerPage,
+                search: search || undefined,
+                status: statusFilter === 'ALL' ? undefined : statusFilter,
+                sort: `${orderBy},${orderDirection}`
+            };
+            const res = await getCheques(params);
+            return res.data || res;
+        },
+        keepPreviousData: true
+    });
+
+    const { data: customerData } = useQuery({
+        queryKey: ['creditCustomers', 'active'],
+        queryFn: async () => {
+            const res = await getCreditCustomers({ status: 'ACTIVE', size: 1000 });
+            const data = res.data || res;
+            return Array.isArray(data) ? data : (data.content || []);
+        }
+    });
+
+    const { data: summaryData, isLoading: summaryLoading } = useQuery({
+        queryKey: ['cheques', 'summary'],
+        queryFn: async () => {
+            const res = await getChequesSummary();
+            return res.data || res;
+        }
+    });
+
+    const cheques = chequeData?.content || [];
+    const totalCount = chequeData?.totalElements || 0;
+    const customers = customerData || [];
+
+    // Mutations
+    const mutationOptions = {
+        onSuccess: () => {
+            queryClient.invalidateQueries(['cheques']);
+            setDialogOpen(false);
+            setDeleteDialogOpen(false);
+        },
+        onError: (error) => {
+            toast.error(error.response?.data?.message || 'Operation failed');
         }
     };
 
-    useEffect(() => {
-        fetchData();
-    }, [searchId]);
+    const createMutation = useMutation({ mutationFn: createCheque, ...mutationOptions, onSuccess: () => { toast.success('Cheque added'); mutationOptions.onSuccess(); } });
+    const updateMutation = useMutation({ mutationFn: (data) => updateCheque(editId || data.id, data), ...mutationOptions, onSuccess: () => { toast.success('Cheque updated'); mutationOptions.onSuccess(); } });
+    const statusMutation = useMutation({
+        mutationFn: ({ id, ...data }) => updateChequeStatus(id, data),
+        ...mutationOptions,
+        onSuccess: () => {
+            toast.success('Status updated');
+            setStatusDialogOpen(false);
+            mutationOptions.onSuccess();
+        }
+    });
+    const deleteMutation = useMutation({ mutationFn: deleteCheque, ...mutationOptions, onSuccess: () => { toast.success('Cheque deleted'); mutationOptions.onSuccess(); } });
 
+    // Handlers
     const handleOpenDialog = (item = null) => {
         if (item) {
             setEditId(item.id);
@@ -61,312 +116,170 @@ export default function Cheques() {
         setDialogOpen(true);
     };
 
-    const handleCloseDialog = () => {
-        setDialogOpen(false);
-        setEditId(null);
-        setFormData(initialFormData);
-    };
-
-    const handleSubmit = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        setSubmitting(true);
-
-        try {
-            if (editId) {
-                await updateCheque(editId, formData);
-                toast.success('Cheque updated successfully');
-            } else {
-                await createCheque(formData);
-                toast.success('Cheque created successfully');
-            }
-            handleCloseDialog();
-            fetchData();
-        } catch (e) {
-            console.error(e);
-            toast.error('Operation failed');
-        } finally {
-            setSubmitting(false);
-        }
+        if (editId) updateMutation.mutate(formData);
+        else createMutation.mutate(formData);
     };
 
-    const handleStatusChange = async (id, status) => {
-        try {
-            await updateChequeStatus(id, status);
-            toast.success('Status updated successfully');
-            fetchData();
-        } catch (e) {
-            console.error(e);
-            toast.error('Status update failed');
-        }
+    const handleSort = (property) => {
+        const isAsc = orderBy === property && orderDirection === 'asc';
+        setOrderDirection(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
     };
 
-    const handleOpenDeleteDialog = (id) => {
-        setDeleteId(id);
-        setDeleteDialogOpen(true);
-    };
-
-    const handleDelete = async () => {
-        setSubmitting(true);
+    const handleExportPDF = async () => {
         try {
-            await deleteCheque(deleteId);
-            toast.success('Cheque deleted successfully');
-            setDeleteDialogOpen(false);
-            setDeleteId(null);
-            fetchData();
-        } catch (e) {
-            console.error(e);
-            toast.error('Delete failed');
-        } finally {
-            setSubmitting(false);
-        }
+            const { data } = await getChequeReportPdf(statusFilter === 'ALL' ? null : statusFilter);
+            downloadBlob(data, `Cheque_Report_${statusFilter}.pdf`);
+            toast.success("Report downloaded");
+        } catch (e) { toast.error("Export failed"); }
     };
 
     const formatCurrency = (val) => {
         const num = Number(val);
-        if (Number.isFinite(num)) return `₹${num.toFixed(2)}`;
-        return '—';
+        return Number.isFinite(num) ? `₹${num.toFixed(2)}` : '—';
     };
 
-    const columns = [
-        { id: 'id', label: 'ID', minWidth: 60 },
-        { id: 'chequeNumber', label: 'Cheque No', minWidth: 120 },
-        { id: 'customerId', label: 'Customer ID', minWidth: 100 },
-        { id: 'bankName', label: 'Bank Name', minWidth: 150 },
+    const columns = useMemo(() => [
+        { id: 'publicId', label: 'ID', minWidth: 90, sortable: true },
+        { id: 'chequeNumber', label: 'Cheque No', minWidth: 120, sortable: true },
         {
-            id: 'amount',
-            label: 'Amount',
-            minWidth: 120,
-            align: 'right',
-            render: (val) => formatCurrency(val)
+            id: 'customerId', label: 'Customer', minWidth: 150, sortable: true,
+            render: (val) => customerData?.find(c => c.id === val)?.name || `Customer #${val}`
         },
-        { id: 'issueDate', label: 'Issue Date', minWidth: 100 },
-        { id: 'dueDate', label: 'Due Date', minWidth: 100 },
+        { id: 'bankName', label: 'Bank Name', minWidth: 150, sortable: true },
+        { id: 'amount', label: 'Amount', minWidth: 120, align: 'right', sortable: true, render: (val) => formatCurrency(val) },
+        { id: 'issueDate', label: 'Issue Date', minWidth: 110, sortable: true },
+        { id: 'dueDate', label: 'Due Date', minWidth: 110, sortable: true },
         {
-            id: 'status',
-            label: 'Status',
-            minWidth: 150,
+            id: 'status', label: 'Status', minWidth: 150, sortable: true,
             render: (val, row) => (
-                <TextField
-                    select
-                    size="small"
-                    variant="standard"
-                    value={val}
-                    onChange={(e) => handleStatusChange(row.id, e.target.value)}
-                    sx={{ minWidth: 120 }}
+                <Button
+                    size="small" variant="outlined"
+                    color={val === 'CLEARED' ? 'success' : val === 'BOUNCED' ? 'error' : 'warning'}
+                    onClick={() => {
+                        setStatusData({
+                            id: row.id,
+                            status: val,
+                            depositDate: row.depositDate || new Date().toISOString().split('T')[0],
+                            clearedDate: row.clearedDate || '',
+                            bouncedDate: row.bouncedDate || '',
+                            bounceReason: row.bounceReason || ''
+                        });
+                        setStatusDialogOpen(true);
+                    }}
                 >
-                    <MenuItem value="PENDING">PENDING</MenuItem>
-                    <MenuItem value="DEPOSITED">DEPOSITED</MenuItem>
-                    <MenuItem value="CLEARED">CLEARED</MenuItem>
-                    <MenuItem value="BOUNCED">BOUNCED</MenuItem>
-                </TextField>
+                    {val}
+                </Button>
             )
-        },
-        { id: 'note', label: 'Note', minWidth: 150 },
-        {
-            id: 'createdAt',
-            label: 'Created At',
-            minWidth: 150,
-            render: (val) => val ? new Date(val).toLocaleString() : '—'
-        },
-        {
-            id: 'updatedAt',
-            label: 'Updated At',
-            minWidth: 150,
-            render: (val) => val ? new Date(val).toLocaleString() : '—'
-        },
-    ];
+        }
+    ], []);
 
     return (
-        <AnimatedContainer delay={0.1}>
+        <AnimatedContainer>
             <PageHeader
-                title="Cheques"
-                subtitle="Post-dated cheque lifecycle management"
+                title="Cheques" subtitle="Post-dated cheque lifecycle management"
                 breadcrumbs={[{ label: 'Cheques', path: '/cheques' }]}
                 actions={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={() => handleOpenDialog()}
-                    >
-                        Add Cheque
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                        <Button variant="outlined" startIcon={<PictureAsPdf />} onClick={handleExportPDF}>Export PDF</Button>
+                        <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenDialog()}>Add Cheque</Button>
+                    </Stack>
                 }
             />
 
-            <DashboardCard title="Cheque Records" subtitle="Track and manage post-dated cheques">
-                {/* Filter Bar */}
-                <Box mb={3} display="flex" gap={2} alignItems="center">
+            <Grid container spacing={3} mb={4}>
+                <Grid item xs={12} sm={3}><KpiCard title="Total Volume" value={formatCurrency(summaryData?.totalAmount || 0)} icon={AccountBalance} color="primary" loading={summaryLoading} /></Grid>
+                <Grid item xs={12} sm={3}><KpiCard title="Pending" value={summaryData?.pending || 0} icon={Timer} color="warning" loading={summaryLoading} /></Grid>
+                <Grid item xs={12} sm={3}><KpiCard title="Cleared" value={summaryData?.cleared || 0} icon={CheckCircle} color="success" loading={summaryLoading} /></Grid>
+                <Grid item xs={12} sm={3}><KpiCard title="Bounced" value={summaryData?.bounced || 0} icon={ErrorOutline} color="error" loading={summaryLoading} /></Grid>
+            </Grid>
+
+            <DashboardCard title="Cheque Records">
+                <Box mb={3} display="flex" justifyContent="space-between" alignItems="center" gap={2} flexWrap="wrap">
                     <TextField
-                        size="small"
-                        label="Search by Cheque ID"
-                        type="number"
-                        placeholder="Enter ID"
-                        value={searchId}
-                        onChange={(e) => setSearchId(e.target.value)}
-                        sx={{ width: 250 }}
+                        size="small" label="Search" placeholder="Cheque #, Bank, ID" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                        sx={{ minWidth: 250 }} InputProps={{ startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> }}
                     />
-                    {searchId && (
-                        <Button
-                            color="inherit"
-                            onClick={() => setSearchId('')}
-                        >
-                            Clear
-                        </Button>
-                    )}
+                    <Stack direction="row" spacing={2} alignItems="center">
+                        <ToggleButtonGroup value={statusFilter} exclusive onChange={(e, v) => v && setStatusFilter(v)} size="small" color="primary">
+                            <ToggleButton value="PENDING">Pending</ToggleButton>
+                            <ToggleButton value="CLEARED">Cleared</ToggleButton>
+                            <ToggleButton value="BOUNCED">Bounced</ToggleButton>
+                            <ToggleButton value="ALL">All</ToggleButton>
+                        </ToggleButtonGroup>
+                        <Button startIcon={<CleaningServices />} onClick={() => { setSearch(''); setStatusFilter('ALL'); setPage(0); }}>Clear</Button>
+                    </Stack>
                 </Box>
 
                 <DataTable
-                    columns={columns}
-                    data={cheques}
-                    searchKey="chequeNumber"
-                    loading={loading}
-                    emptyTitle="No cheques found"
-                    emptyDescription="Start by adding your first cheque record."
-                    emptyAction={
-                        <Button
-                            variant="contained"
-                            startIcon={<Add />}
-                            onClick={() => handleOpenDialog()}
-                        >
-                            Add First Cheque
-                        </Button>
-                    }
-                    actions={(row) => {
-                        const canDelete = row.status === 'PENDING';
-                        return (
-                            <>
-                                <Tooltip title="Edit">
-                                    <IconButton size="small" onClick={() => handleOpenDialog(row)}>
-                                        <Edit fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title={canDelete ? "Delete" : "Only PENDING cheques can be deleted"}>
-                                    <span>
-                                        <IconButton
-                                            size="small"
-                                            color="error"
-                                            onClick={() => handleOpenDeleteDialog(row.id)}
-                                            disabled={!canDelete}
-                                        >
-                                            <Delete fontSize="small" />
-                                        </IconButton>
-                                    </span>
-                                </Tooltip>
-                            </>
-                        );
-                    }}
+                    serverSide columns={columns} data={cheques} loading={isLoading}
+                    totalCount={totalCount} page={page} rowsPerPage={rowsPerPage}
+                    onPageChange={setPage} onRowsPerPageChange={setRowsPerPage}
+                    orderBy={orderBy} orderDirection={orderDirection} onSortChange={handleSort}
+                    actions={(row) => (
+                        <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="View"><IconButton size="small" color="info" onClick={() => { setSelectedCheque(row); setDetailsOpen(true); }}><Visibility fontSize="small" /></IconButton></Tooltip>
+                            <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpenDialog(row)}><Edit fontSize="small" /></IconButton></Tooltip>
+                            <Tooltip title={row.status === 'PENDING' ? "Delete" : "Only PENDING can be deleted"}>
+                                <span><IconButton size="small" color="error" disabled={row.status !== 'PENDING'} onClick={() => { setDeleteId(row.id); setDeleteDialogOpen(true); }}><Delete fontSize="small" /></IconButton></span>
+                            </Tooltip>
+                        </Stack>
+                    )}
                 />
             </DashboardCard>
 
-            {/* Create/Edit Dialog */}
-            <FormDialog
-                open={dialogOpen}
-                onClose={handleCloseDialog}
-                onSubmit={handleSubmit}
-                title={editId ? 'Edit Cheque' : 'Add New Cheque'}
-                subtitle={editId ? 'Update cheque information' : 'Enter cheque details'}
-                loading={submitting}
-                maxWidth="sm"
-            >
+            <FormDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={handleSubmit} title={editId ? 'Edit Cheque' : 'Add New Cheque'} loading={createMutation.isLoading || updateMutation.isLoading} maxWidth="sm">
                 <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            label="Cheque Number"
-                            value={formData.chequeNumber}
-                            onChange={(e) => setFormData({ ...formData, chequeNumber: e.target.value })}
-                            required
-                            disabled={submitting}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            label="Bank Name"
-                            value={formData.bankName}
-                            onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                            required
-                            disabled={submitting}
-                        />
-                    </Grid>
+                    <Grid item xs={12} sm={6}><TextField fullWidth label="Cheque Number" value={formData.chequeNumber} onChange={(e) => setFormData({ ...formData, chequeNumber: e.target.value })} required /></Grid>
+                    <Grid item xs={12} sm={6}><TextField fullWidth label="Bank Name" value={formData.bankName} onChange={(e) => setFormData({ ...formData, bankName: e.target.value })} required /></Grid>
                     <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            select
-                            label="Customer"
-                            value={formData.customerId}
-                            onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
-                            disabled={submitting}
-                            helperText="Optional - link to credit customer"
-                        >
+                        <TextField select fullWidth label="Linked Customer" value={formData.customerId} onChange={(e) => setFormData({ ...formData, customerId: e.target.value })} helperText="Optional - link to credit customer">
                             <MenuItem value=""><em>None</em></MenuItem>
-                            {customers.map(cu => (
-                                <MenuItem key={cu.id} value={cu.id}>{cu.name}</MenuItem>
-                            ))}
+                            {customers.map(cu => <MenuItem key={cu.id} value={cu.id}>{cu.name} ({cu.publicId})</MenuItem>)}
                         </TextField>
                     </Grid>
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Amount (₹)"
-                            value={formData.amount}
-                            onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
-                            required
-                            disabled={submitting}
-                            inputProps={{ min: 0, step: 0.01 }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            type="date"
-                            label="Issue Date"
-                            InputLabelProps={{ shrink: true }}
-                            value={formData.issueDate}
-                            onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
-                            required
-                            disabled={submitting}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            type="date"
-                            label="Due Date"
-                            InputLabelProps={{ shrink: true }}
-                            value={formData.dueDate}
-                            onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                            required
-                            disabled={submitting}
-                        />
-                    </Grid>
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            multiline
-                            rows={2}
-                            label="Note"
-                            value={formData.note}
-                            onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                            disabled={submitting}
-                            placeholder="Optional notes..."
-                        />
-                    </Grid>
+                    <Grid item xs={12}><TextField fullWidth type="number" label="Amount (₹)" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })} required inputProps={{ min: 0, step: 0.01 }} /></Grid>
+                    <Grid item xs={12} sm={6}><TextField fullWidth type="date" label="Issue Date" InputLabelProps={{ shrink: true }} value={formData.issueDate} onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })} required /></Grid>
+                    <Grid item xs={12} sm={6}><TextField fullWidth type="date" label="Due Date" InputLabelProps={{ shrink: true }} value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} required /></Grid>
+                    <Grid item xs={12}><TextField fullWidth multiline rows={2} label="Note" value={formData.note} onChange={(e) => setFormData({ ...formData, note: e.target.value })} placeholder="Optional notes..." /></Grid>
                 </Grid>
             </FormDialog>
 
-            {/* Delete Confirmation Dialog */}
-            <ConfirmDialog
-                open={deleteDialogOpen}
-                onClose={() => setDeleteDialogOpen(false)}
-                onConfirm={handleDelete}
-                title="Delete Cheque"
-                message="Are you sure you want to delete this cheque record? This action cannot be undone."
-                confirmText="Delete"
-                severity="error"
-                loading={submitting}
-            />
+            <ConfirmDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={() => deleteMutation.mutate(deleteId)} title="Delete Cheque" message="Are you sure you want to delete this cheque record? This action cannot be undone." severity="error" loading={deleteMutation.isLoading} />
+
+            <FormDialog
+                open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)}
+                onSubmit={(e) => { e.preventDefault(); statusMutation.mutate(statusData); }}
+                title="Update Cheque Status" loading={statusMutation.isLoading} maxWidth="xs"
+            >
+                <Stack spacing={2}>
+                    <TextField select fullWidth label="Status" value={statusData.status} onChange={(e) => setStatusData({ ...statusData, status: e.target.value })}>
+                        <MenuItem value="PENDING">PENDING</MenuItem>
+                        <MenuItem value="DEPOSITED">DEPOSITED</MenuItem>
+                        <MenuItem value="CLEARED">CLEARED</MenuItem>
+                        <MenuItem value="BOUNCED">BOUNCED</MenuItem>
+                    </TextField>
+
+                    {statusData.status === 'DEPOSITED' && (
+                        <TextField fullWidth type="date" label="Deposit Date" InputLabelProps={{ shrink: true }} value={statusData.depositDate} onChange={(e) => setStatusData({ ...statusData, depositDate: e.target.value })} required />
+                    )}
+
+                    {statusData.status === 'CLEARED' && (
+                        <TextField fullWidth type="date" label="Cleared Date" InputLabelProps={{ shrink: true }} value={statusData.clearedDate} onChange={(e) => setStatusData({ ...statusData, clearedDate: e.target.value })} required />
+                    )}
+
+                    {statusData.status === 'BOUNCED' && (
+                        <>
+                            <TextField fullWidth type="date" label="Bounced Date" InputLabelProps={{ shrink: true }} value={statusData.bouncedDate} onChange={(e) => setStatusData({ ...statusData, bouncedDate: e.target.value })} required />
+                            <TextField fullWidth multiline rows={2} label="Bounce Reason" value={statusData.bounceReason} onChange={(e) => setStatusData({ ...statusData, bounceReason: e.target.value })} required />
+                        </>
+                    )}
+                </Stack>
+            </FormDialog>
+
+            <GenericDetailsDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} data={selectedCheque} title="Cheque Details" />
         </AnimatedContainer>
     );
 }

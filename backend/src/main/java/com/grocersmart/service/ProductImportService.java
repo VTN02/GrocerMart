@@ -26,8 +26,8 @@ import java.util.Optional;
 public class ProductImportService {
 
     private final ProductRepository productRepository;
+    private final PublicIdGeneratorService publicIdGeneratorService;
 
-    @Transactional
     public CsvImportResultDTO importFromCsv(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             return CsvImportResultDTO.builder()
@@ -119,6 +119,9 @@ public class ProductImportService {
                     product.setBulkQty(bulkQty);
                     product.setStatus(Product.Status.ACTIVE); // Requirement 1.2 isActive = true
                     product.setCreatedAt(LocalDateTime.now()); // Requirement 1.2 createdAt = now
+                    
+                    // Generate public ID (Requirement: All entities must have public_id)
+                    product.setPublicId(publicIdGeneratorService.nextId(com.grocersmart.common.EntityType.PRODUCT));
 
                     productRepository.save(product);
                     imported++;

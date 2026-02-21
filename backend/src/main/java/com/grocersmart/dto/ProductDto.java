@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 public class ProductDto {
     private Long id;
+    private String publicId;
     private String name;
     private String category;
     private Product.UnitType unitType;
@@ -15,7 +16,11 @@ public class ProductDto {
     private Double bulkPrice;
     private Double purchasePrice;
     private Integer reorderLevel;
+    private Integer unitsPerBulk;
     private Product.Status status;
     private java.time.LocalDateTime createdAt;
     private java.time.LocalDateTime updatedAt;
+    private Boolean isDeleted;
+    private java.time.LocalDateTime deletedAt;
+    private String deletedBy;
 }

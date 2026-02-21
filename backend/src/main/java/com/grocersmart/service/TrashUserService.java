@@ -38,6 +38,7 @@ public class TrashUserService {
         deletedUser.setDeletedAt(LocalDateTime.now());
         deletedUser.setDeletedByUserId(deletedByUserId);
         deletedUser.setReason(reason);
+        deletedUser.setPublicId(user.getPublicId());
 
         try {
             // Serialize user to JSON
@@ -131,6 +132,7 @@ public class TrashUserService {
     private DeletedItemDto mapToDto(DeletedUser deleted) {
         DeletedItemDto dto = new DeletedItemDto();
         dto.setDeletedId(deleted.getDeletedId());
+        dto.setId(deleted.getDeletedId());
         dto.setOriginalId(deleted.getOriginalId());
         dto.setDeletedAt(deleted.getDeletedAt());
         dto.setDeletedByUserId(deleted.getDeletedByUserId());
@@ -138,7 +140,9 @@ public class TrashUserService {
         dto.setSnapshotJson(deleted.getSnapshotJson());
         dto.setRestored(deleted.getRestored());
         dto.setRestoredAt(deleted.getRestoredAt());
+        dto.setRestoredAt(deleted.getRestoredAt());
         dto.setRestoreCount(deleted.getRestoreCount());
+        dto.setPublicId(deleted.getPublicId());
 
         // Extract entity name from snapshot for display
         try {

@@ -42,24 +42,52 @@ public class ProductController {
     @GetMapping
     public ResponseEntity<ApiResponse<Page<ProductDto>>> getProducts(
             @RequestParam(required = false) Long id,
+            @RequestParam(required = false) String publicId,
+            @RequestParam(required = false) String search,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) Product.Status status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id,desc") String sort) {
+
+        // Basic sort parsing
+        String[] sortParts = sort.split(",");
+        org.springframework.data.domain.Sort sortObj = sortParts.length > 1 && sortParts[1].equalsIgnoreCase("desc")
+                ? org.springframework.data.domain.Sort.by(sortParts[0]).descending()
+                : org.springframework.data.domain.Sort.by(sortParts[0]).ascending();
+
         if (id != null) {
             try {
                 ProductDto product = productService.getProductById(id);
                 Page<ProductDto> productPage = new org.springframework.data.domain.PageImpl<>(
                         java.util.Collections.singletonList(product),
-                        PageRequest.of(0, 1),
+                        PageRequest.of(0, 1, sortObj),
                         1);
                 return ResponseEntity.ok(ApiResponse.success(productPage, "Product retrieved successfully"));
             } catch (jakarta.persistence.EntityNotFoundException e) {
                 return ResponseEntity
-                        .ok(ApiResponse.success(org.springframework.data.domain.Page.empty(), "Product not found"));
+                        .ok(ApiResponse.success(
+                                org.springframework.data.domain.Page.empty(PageRequest.of(page, size, sortObj)),
+                                "Product not found"));
             }
         }
-        Page<ProductDto> products = productService.getProducts(category, status, PageRequest.of(page, size));
+        if (publicId != null) {
+            try {
+                ProductDto product = productService.getProductByPublicId(publicId);
+                Page<ProductDto> productPage = new org.springframework.data.domain.PageImpl<>(
+                        java.util.Collections.singletonList(product),
+                        PageRequest.of(0, 1, sortObj),
+                        1);
+                return ResponseEntity.ok(ApiResponse.success(productPage, "Product retrieved successfully"));
+            } catch (jakarta.persistence.EntityNotFoundException e) {
+                return ResponseEntity
+                        .ok(ApiResponse.success(
+                                org.springframework.data.domain.Page.empty(PageRequest.of(page, size, sortObj)),
+                                "Product not found"));
+            }
+        }
+        Page<ProductDto> products = productService.getProducts(search, category, status,
+                PageRequest.of(page, size, sortObj));
         return ResponseEntity.ok(ApiResponse.success(products, "Products retrieved successfully"));
     }
 

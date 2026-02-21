@@ -14,6 +14,9 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "public_id", unique = true, nullable = false, length = 20)
+    private String publicId;
+
     @Column(nullable = false)
     private String name;
 
@@ -31,10 +34,16 @@ public class Product {
     private Double purchasePrice = 0.0;
 
     private Integer reorderLevel = 0;
+    private Integer unitsPerBulk = 1;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, columnDefinition = "VARCHAR(50)")
     private Status status = Status.ACTIVE;
+
+    @Column(name = "is_deleted")
+    private Boolean isDeleted = false;
+    private LocalDateTime deletedAt;
+    private String deletedBy;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

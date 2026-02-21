@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, TextField, MenuItem, Paper, Tooltip } from '@mui/material';
-import { Add, Visibility } from '@mui/icons-material';
+import { Box, Button, TextField, MenuItem, Paper, Tooltip, IconButton, Autocomplete } from '@mui/material';
+import { Add, Visibility, PictureAsPdf } from '@mui/icons-material';
 import { getPOs, createPO } from '../api/purchaseOrdersApi';
 import { getSuppliers } from '../api/suppliersApi';
+import { getPurchaseOrderReportPdf, getPurchaseOrderPdf, downloadBlob } from '../api/reportsApi';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { PageHeader, DataTable, FormDialog, StatusChip, DashboardCard, AnimatedContainer } from '../components';
@@ -19,12 +20,24 @@ export default function PurchaseOrders() {
     const fetchData = async () => {
         setLoading(true);
         try {
+            const params = {};
+            if (searchId) {
+                if (isNaN(searchId)) {
+                    params.publicId = searchId;
+                } else {
+                    params.id = searchId;
+                }
+            }
             const [poRes, supRes] = await Promise.all([
-                getPOs(searchId ? { id: searchId } : undefined),
-                getSuppliers()
+                getPOs(params),
+                getSuppliers({ size: 1000 })
             ]);
-            setPos(Array.isArray(poRes.data) ? poRes.data : (poRes.data ? [poRes.data] : []));
-            setSuppliers(Array.isArray(supRes.data) ? supRes.data : (supRes.data ? [supRes.data] : []));
+
+            const poData = poRes.data?.content || (Array.isArray(poRes.data) ? poRes.data : []);
+            const supData = supRes.data?.content || (Array.isArray(supRes.data) ? supRes.data : []);
+
+            setPos(poData);
+            setSuppliers(supData);
         } catch (e) {
             console.error(e);
             setPos([]);
@@ -64,6 +77,28 @@ export default function PurchaseOrders() {
         }
     };
 
+    const handleExportAll = async () => {
+        try {
+            const { data } = await getPurchaseOrderReportPdf(null, null);
+            downloadBlob(data, `Purchase_Orders_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+            toast.success("Purchase orders report downloaded");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to generate report");
+        }
+    };
+
+    const handleDownloadPoPdf = async (id) => {
+        try {
+            const { data } = await getPurchaseOrderPdf(id);
+            downloadBlob(data, `Purchase_Order_${id}.pdf`);
+            toast.success("Purchase Order PDF downloaded");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to generate PO PDF");
+        }
+    };
+
     const formatCurrency = (val) => {
         const num = Number(val);
         if (Number.isFinite(num)) return `₹${num.toFixed(2)}`;
@@ -77,7 +112,7 @@ export default function PurchaseOrders() {
     }));
 
     const columns = [
-        { id: 'id', label: 'PO ID', minWidth: 60 },
+        { id: 'publicId', label: 'ID', minWidth: 90 },
         { id: 'supplierId', label: 'Supplier ID', minWidth: 100 },
         { id: 'supplierName', label: 'Supplier', minWidth: 180 },
         {
@@ -120,13 +155,22 @@ export default function PurchaseOrders() {
                 subtitle="Manage supplier purchase orders"
                 breadcrumbs={[{ label: 'Purchase Orders', path: '/purchase-orders' }]}
                 actions={
-                    <Button
-                        variant="contained"
-                        startIcon={<Add />}
-                        onClick={handleOpenDialog}
-                    >
-                        New PO
-                    </Button>
+                    <Box display="flex" gap={1}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<PictureAsPdf />}
+                            onClick={handleExportAll}
+                        >
+                            Export List
+                        </Button>
+                        <Button
+                            variant="contained"
+                            startIcon={<Add />}
+                            onClick={handleOpenDialog}
+                        >
+                            New PO
+                        </Button>
+                    </Box>
                 }
             />
 
@@ -136,7 +180,7 @@ export default function PurchaseOrders() {
                     <TextField
                         size="small"
                         label="Search by PO ID"
-                        type="number"
+                        type="text"
                         placeholder="Enter ID"
                         value={searchId}
                         onChange={(e) => setSearchId(e.target.value)}
@@ -169,17 +213,28 @@ export default function PurchaseOrders() {
                         </Button>
                     }
                     actions={(row) => (
-                        <Tooltip title="View Details">
-                            <Button
-                                component={Link}
-                                to={`/purchase-orders/${row.id}/items`}
-                                startIcon={<Visibility />}
-                                size="small"
-                                variant="outlined"
-                            >
-                                Details
-                            </Button>
-                        </Tooltip>
+                        <>
+                            <Tooltip title="View Details">
+                                <Button
+                                    component={Link}
+                                    to={`/purchase-orders/${row.id}/items`}
+                                    startIcon={<Visibility />}
+                                    size="small"
+                                    variant="outlined"
+                                >
+                                    Details
+                                </Button>
+                            </Tooltip>
+                            <Tooltip title="Print PO">
+                                <IconButton
+                                    size="small"
+                                    color="secondary"
+                                    onClick={() => handleDownloadPoPdf(row.id)}
+                                >
+                                    <PictureAsPdf fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </>
                     )}
                 />
             </DashboardCard>
@@ -195,23 +250,26 @@ export default function PurchaseOrders() {
                 submitText="Create Draft"
                 maxWidth="xs"
             >
-                <TextField
+                <Autocomplete
                     fullWidth
-                    select
-                    label="Supplier"
-                    value={supplierId}
-                    onChange={(e) => setSupplierId(e.target.value)}
-                    required
+                    options={suppliers}
+                    getOptionLabel={(option) => `${option.name} (${option.publicId})`}
+                    value={suppliers.find(s => s.id === supplierId) || null}
+                    onChange={(event, newValue) => {
+                        setSupplierId(newValue ? newValue.id : '');
+                    }}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            label="Supplier"
+                            required
+                            error={!supplierId && submitting}
+                            helperText="Search and select a supplier"
+                        />
+                    )}
                     disabled={submitting}
-                    autoFocus
-                    helperText="Select the supplier for this purchase order"
-                >
-                    {suppliers.map(s => (
-                        <MenuItem key={s.id} value={s.id}>
-                            {s.name}
-                        </MenuItem>
-                    ))}
-                </TextField>
+                    autoHighlight
+                />
             </FormDialog>
         </AnimatedContainer>
     );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Table,
     TableBody,
@@ -14,9 +14,11 @@ import {
     Skeleton,
     IconButton,
     Tooltip,
+    TableSortLabel,
 } from '@mui/material';
 import { Search, FilterList } from '@mui/icons-material';
 import EmptyState from './EmptyState';
+import debounce from 'lodash/debounce';
 
 export default function DataTable({
     columns,
@@ -29,42 +31,86 @@ export default function DataTable({
     emptyAction,
     onRowClick,
     stickyHeader = true,
-    maxHeight = '70vh',  // Dynamic default height
+    maxHeight = '70vh',
+    // Server-side props
+    serverSide = false,
+    page: externalPage = 0,
+    rowsPerPage: externalRowsPerPage = 10,
+    totalCount = 0,
+    onPageChange,
+    onRowsPerPageChange,
+    onSearchChange,
+    // Sorting
+    orderBy,
+    orderDirection = 'asc',
+    onSortChange,
 }) {
-    const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [page, setInternalPage] = useState(0);
+    const [rowsPerPage, setInternalRowsPerPage] = useState(10);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const filteredData = searchKey && searchTerm
+    const currentPage = serverSide ? externalPage : page;
+    const currentRowsPerPage = serverSide ? externalRowsPerPage : rowsPerPage;
+
+    // Debounced search for server-side
+    const debouncedSearch = useCallback(
+        debounce((val) => {
+            if (onSearchChange) onSearchChange(val);
+        }, 500),
+        [onSearchChange]
+    );
+
+    const handleSearchChange = (event) => {
+        const val = event.target.value;
+        setSearchTerm(val);
+        if (serverSide) {
+            debouncedSearch(val);
+        } else {
+            setInternalPage(0);
+        }
+    };
+
+    const handleChangePage = (event, newPage) => {
+        if (serverSide) {
+            onPageChange && onPageChange(newPage);
+        } else {
+            setInternalPage(newPage);
+        }
+    };
+
+    const handleChangeRowsPerPage = (event) => {
+        const newRows = parseInt(event.target.value, 10);
+        if (serverSide) {
+            onRowsPerPageChange && onRowsPerPageChange(newRows);
+        } else {
+            setInternalRowsPerPage(newRows);
+            setInternalPage(0);
+        }
+    };
+
+    const filteredData = (!serverSide && searchKey && searchTerm)
         ? data.filter((row) => {
             const searchStr = searchTerm.toLowerCase();
             const mainFieldMatch = String(row[searchKey] || '').toLowerCase().includes(searchStr);
             const idMatch = String(row.id || '').toLowerCase().includes(searchStr);
-            return mainFieldMatch || idMatch;
+            const publicIdMatch = String(row.publicId || '').toLowerCase().includes(searchStr);
+            return mainFieldMatch || idMatch || publicIdMatch;
         })
         : data;
 
-    const paginatedData = filteredData.slice(
-        page * rowsPerPage,
-        page * rowsPerPage + rowsPerPage
-    );
+    const displayData = serverSide
+        ? data
+        : filteredData.slice(currentPage * currentRowsPerPage, currentPage * currentRowsPerPage + currentRowsPerPage);
 
-    const handleChangePage = (event, newPage) => {
-        setPage(newPage);
-    };
-
-    const handleChangeRowsPerPage = (event) => {
-        setRowsPerPage(parseInt(event.target.value, 10));
-        setPage(0);
-    };
+    const count = serverSide ? totalCount : filteredData.length;
 
     // Loading skeleton
     if (loading) {
         return (
-            <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+            <Paper sx={{ width: '100%', overflow: 'hidden', borderRadius: 2 }}>
                 {searchKey && (
                     <Box p={2}>
-                        <Skeleton variant="rectangular" height={56} sx={{ borderRadius: 2 }} />
+                        <Skeleton variant="rectangular" height={45} sx={{ borderRadius: 1 }} />
                     </Box>
                 )}
 
@@ -77,10 +123,10 @@ export default function DataTable({
                                         key={column.id}
                                         style={{ minWidth: column.minWidth }}
                                     >
-                                        <Skeleton />
+                                        <Skeleton width="60%" />
                                     </TableCell>
                                 ))}
-                                {actions && <TableCell><Skeleton /></TableCell>}
+                                {actions && <TableCell><Skeleton width="40%" /></TableCell>}
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -88,12 +134,12 @@ export default function DataTable({
                                 <TableRow key={index}>
                                     {columns.map((column) => (
                                         <TableCell key={column.id}>
-                                            <Skeleton />
+                                            <Skeleton width="80%" />
                                         </TableCell>
                                     ))}
                                     {actions && (
-                                        <TableCell>
-                                            <Skeleton />
+                                        <TableCell align="right">
+                                            <Skeleton width="40%" sx={{ ml: 'auto' }} />
                                         </TableCell>
                                     )}
                                 </TableRow>
@@ -106,22 +152,19 @@ export default function DataTable({
     }
 
     return (
-        <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+        <Paper sx={{ width: '100%', overflow: 'hidden', borderRadius: 2 }}>
             {searchKey && (
                 <Box p={2} pb={0}>
                     <TextField
                         fullWidth
                         size="small"
-                        placeholder={`Search by ${searchKey}...`}
+                        placeholder={`Search...`}
                         value={searchTerm}
-                        onChange={(e) => {
-                            setSearchTerm(e.target.value);
-                            setPage(0);
-                        }}
+                        onChange={handleSearchChange}
                         InputProps={{
                             startAdornment: (
                                 <InputAdornment position="start">
-                                    <Search fontSize="small" />
+                                    <Search fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </InputAdornment>
                             ),
                         }}
@@ -130,7 +173,7 @@ export default function DataTable({
                 </Box>
             )}
 
-            {filteredData.length === 0 ? (
+            {displayData.length === 0 ? (
                 <EmptyState
                     title={emptyTitle}
                     description={emptyDescription}
@@ -146,12 +189,23 @@ export default function DataTable({
                                         <TableCell
                                             key={column.id}
                                             align={column.align || 'left'}
+                                            sortDirection={orderBy === column.id ? orderDirection : false}
                                             style={{
                                                 minWidth: column.minWidth,
                                                 fontWeight: 600,
                                             }}
                                         >
-                                            {column.label}
+                                            {serverSide && column.sortable !== false ? (
+                                                <TableSortLabel
+                                                    active={orderBy === column.id}
+                                                    direction={orderBy === column.id ? orderDirection : 'asc'}
+                                                    onClick={() => onSortChange && onSortChange(column.id)}
+                                                >
+                                                    {column.label}
+                                                </TableSortLabel>
+                                            ) : (
+                                                column.label
+                                            )}
                                         </TableCell>
                                     ))}
                                     {actions && (
@@ -162,13 +216,14 @@ export default function DataTable({
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {paginatedData.map((row, rowIndex) => (
+                                {displayData.map((row, rowIndex) => (
                                     <TableRow
                                         hover
-                                        key={row.id || rowIndex}
+                                        key={row.id || row.publicId || rowIndex}
                                         onClick={() => onRowClick && onRowClick(row)}
                                         sx={{
                                             cursor: onRowClick ? 'pointer' : 'default',
+                                            transition: 'background-color 0.2s',
                                             '&:hover': {
                                                 bgcolor: 'action.hover',
                                             },
@@ -202,14 +257,16 @@ export default function DataTable({
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}
                         component="div"
-                        count={filteredData.length}
-                        rowsPerPage={rowsPerPage}
-                        page={page}
+                        count={count}
+                        rowsPerPage={currentRowsPerPage}
+                        page={currentPage}
                         onPageChange={handleChangePage}
                         onRowsPerPageChange={handleChangeRowsPerPage}
+                        sx={{ borderTop: 1, borderColor: 'divider' }}
                     />
                 </>
             )}
         </Paper>
     );
 }
+

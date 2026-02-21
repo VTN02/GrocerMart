@@ -16,6 +16,9 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "public_id", unique = true, nullable = false, length = 20)
+    private String publicId;
+
     @Column(unique = true)
     private String invoiceNo;
 
@@ -30,6 +33,16 @@ public class Order {
     private Status status = Status.DRAFT;
 
     private Double totalAmount = 0.0;
+
+    // Link to Sales Record
+    @OneToOne
+    @JoinColumn(name = "sales_record_id")
+    private SalesRecord salesRecord;
+
+    // Optional Credit Customer
+    @ManyToOne
+    @JoinColumn(name = "credit_customer_id")
+    private CreditCustomer creditCustomer;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
@@ -51,7 +64,7 @@ public class Order {
     }
 
     public enum PaymentType {
-        CASH, CARD
+        CASH, CARD, CREDIT
     }
 
     public enum Status {

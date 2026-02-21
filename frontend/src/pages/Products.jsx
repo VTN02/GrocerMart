@@ -1,16 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Button, TextField, MenuItem, IconButton, Tooltip, Grid, Paper, FormControlLabel, Switch } from '@mui/material';
+import React, { useState, useMemo } from 'react';
+import { Box, Button, TextField, MenuItem, IconButton, Tooltip, Grid, CircularProgress, Switch, Stack, InputAdornment, Typography } from '@mui/material';
+import { Add, Delete, Edit, Visibility, FileUpload, PictureAsPdf, Search, Clear } from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProducts, createProduct, updateProduct, deleteProduct, importCsv } from '../api/productsApi';
+import { getInventoryReportPdf, getProductDetailsPdf, downloadBlob } from '../api/reportsApi';
 import { toast } from 'react-toastify';
-import { Add, Edit, Delete, Inventory, FileUpload, ContentCopy, CheckCircle, Warning } from '@mui/icons-material';
-import { CircularProgress } from '@mui/material';
-import PageHeader from '../components/PageHeader';
-import DataTable from '../components/DataTable';
-import FormDialog from '../components/FormDialog';
-import ConfirmDialog from '../components/ConfirmDialog';
-import StatusChip from '../components/StatusChip';
-import DashboardCard from '../components/DashboardCard';
-import AnimatedContainer from '../components/AnimatedContainer';
+import { PageHeader, DataTable, FormDialog, ConfirmDialog, StatusChip, DashboardCard, AnimatedContainer, GenericDetailsDialog } from '../components';
 
 const initialFormData = {
     name: '',
@@ -21,63 +16,76 @@ const initialFormData = {
     bulkQty: 0,
     unitQty: 0,
     unitsPerBulk: 1,
+    reorderLevel: 10,
     status: 'ACTIVE',
 };
 
 export default function Products() {
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+
+    // Table & Filter State
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [search, setSearch] = useState('');
+    const [filterCategory, setFilterCategory] = useState('');
+    const [showArchived, setShowArchived] = useState(false);
+    const [orderBy, setOrderBy] = useState('id');
+    const [orderDirection, setOrderDirection] = useState('desc');
+
+    // Dialog State
     const [dialogOpen, setDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState(null);
     const [editId, setEditId] = useState(null);
     const [deleteId, setDeleteId] = useState(null);
     const [formData, setFormData] = useState(initialFormData);
-    const [submitting, setSubmitting] = useState(false);
 
-    // Filtering state
-    const [filterCategory, setFilterCategory] = useState('');
-    const [searchId, setSearchId] = useState('');
-    const [importing, setImporting] = useState(false);
-    const [showArchived, setShowArchived] = useState(false);
+    // Data Fetching
+    const { data, isLoading } = useQuery({
+        queryKey: ['products', page, rowsPerPage, search, filterCategory, showArchived, orderBy, orderDirection],
+        queryFn: async () => {
+            const params = {
+                page,
+                size: rowsPerPage,
+                search: search || undefined,
+                category: filterCategory || undefined,
+                status: showArchived ? 'DISCONTINUED' : 'ACTIVE',
+                sort: `${orderBy},${orderDirection}`
+            };
+            const response = await getProducts(params);
+            return response.data || response;
+        },
+        keepPreviousData: true
+    });
 
-    const fetchProducts = async () => {
-        setLoading(true);
-        try {
-            // If searching by ID, use the specific endpoint
-            if (searchId) {
-                const { data } = await getProducts({ id: searchId }); // The backend handles 'id' param in /api/products too now
-                setProducts(Array.isArray(data) ? data : [data]);
-            } else {
-                const { data } = await getProducts({
-                    category: filterCategory || undefined,
-                    status: showArchived ? 'DISCONTINUED' : 'ACTIVE',
-                    size: 100 // Get a larger set for client-side table
-                });
-                setProducts(Array.isArray(data) ? data : (data ? [data] : []));
-            }
-        } catch (error) {
-            console.error(error);
-            setProducts([]); // Clear on error
-        } finally {
-            setLoading(false);
+    const products = data?.content || [];
+    const totalCount = data?.totalElements || 0;
+
+    // Mutations
+    const mutationOptions = {
+        onSuccess: () => {
+            queryClient.invalidateQueries(['products']);
+            handleCloseDialog();
+            setDeleteDialogOpen(false);
+        },
+        onError: (error) => {
+            toast.error(error.response?.data?.message || 'Operation failed');
         }
     };
 
-    const formatCurrency = (val) => {
-        const num = Number(val);
-        if (Number.isFinite(num)) return `₹${num.toFixed(2)}`;
-        return '—';
-    };
-
-    const formatNumber = (val) => {
-        const num = Number(val);
-        if (Number.isFinite(num)) return num.toLocaleString();
-        return '—';
-    };
-
-    useEffect(() => {
-        fetchProducts();
-    }, [filterCategory, searchId, showArchived]);
+    const createMutation = useMutation({ mutationFn: createProduct, ...mutationOptions, onSuccess: () => { toast.success('Product created'); mutationOptions.onSuccess(); } });
+    const updateMutation = useMutation({ mutationFn: (data) => updateProduct(editId, data), ...mutationOptions, onSuccess: () => { toast.success('Product updated'); mutationOptions.onSuccess(); } });
+    const deleteMutation = useMutation({ mutationFn: deleteProduct, ...mutationOptions, onSuccess: () => { toast.success('Product deleted'); mutationOptions.onSuccess(); } });
+    const importMutation = useMutation({
+        mutationFn: importCsv,
+        onSuccess: (res) => {
+            const data = res.data || res;
+            toast.success(`Imported ${data.imported} items. Summary: Total ${data.totalRows}, Updated ${data.skippedDuplicates}, Failed ${data.failedRows}`);
+            queryClient.invalidateQueries(['products']);
+        },
+        onError: () => toast.error('Import failed')
+    });
 
     const handleOpenDialog = (product = null) => {
         if (product) {
@@ -91,6 +99,7 @@ export default function Products() {
                 bulkQty: product.bulkQty,
                 unitQty: product.unitQty,
                 unitsPerBulk: product.unitsPerBulk,
+                reorderLevel: product.reorderLevel || 10,
                 status: product.status,
             });
         } else {
@@ -106,431 +115,156 @@ export default function Products() {
         setFormData(initialFormData);
     };
 
-    const handleImportCsv = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        setImporting(true);
-        try {
-            const { data } = await importCsv(file);
-            if (data && data.success) {
-                const { imported, skippedDuplicates, failedRows, totalRows } = data;
-                toast.success(
-                    <div>
-                        <strong>Import Summary:</strong>
-                        <br /> Total: {totalRows}
-                        <br /> Imported: {imported}
-                        <br /> Updated: {skippedDuplicates}
-                        <br /> Failed: {failedRows}
-                    </div>,
-                    { autoClose: 5000 }
-                );
-                fetchProducts();
-            } else {
-                toast.error(result.message || 'Import failed');
-            }
-        } catch (error) {
-            console.error(error);
-            toast.error('An error occurred during import');
-        } finally {
-            setImporting(false);
-            event.target.value = ''; // Reset input
-        }
-    };
-
-    const handleSubmit = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        setSubmitting(true);
+        if (editId) updateMutation.mutate(formData);
+        else createMutation.mutate(formData);
+    };
 
-        try {
-            if (editId) {
-                await updateProduct(editId, formData);
-                toast.success('Product updated successfully');
-            } else {
-                await createProduct(formData);
-                toast.success('Product created successfully');
+    const handleToggleStatus = (product) => {
+        const nextStatus = product.status === 'ACTIVE' ? 'DISCONTINUED' : 'ACTIVE';
+        updateMutation.mutate({ ...product, status: nextStatus }, {
+            onSuccess: () => {
+                toast.success(nextStatus === 'ACTIVE' ? 'Activated' : 'Deactivated');
+                queryClient.invalidateQueries(['products']);
             }
-            handleCloseDialog();
-            fetchProducts();
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setSubmitting(false);
-        }
+        });
     };
 
-    const handleOpenDeleteDialog = (id) => {
-        setDeleteId(id);
-        setDeleteDialogOpen(true);
+    const handleSort = (property) => {
+        const isAsc = orderBy === property && orderDirection === 'asc';
+        setOrderDirection(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
     };
 
-    const handleDelete = async () => {
-        setSubmitting(true);
+    const handleImportCsv = (event) => {
+        const file = event.target.files[0];
+        if (file) importMutation.mutate(file);
+        event.target.value = '';
+    };
+
+    const handleExportPDF = async () => {
         try {
-            await deleteProduct(deleteId);
-            toast.success('Product deleted successfully');
-            setDeleteDialogOpen(false);
-            setDeleteId(null);
-            fetchProducts();
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setSubmitting(false);
-        }
+            const status = showArchived ? 'DISCONTINUED' : 'ACTIVE';
+            const { data } = await getInventoryReportPdf(status);
+            downloadBlob(data, `Inventory_${status}_${new Date().toISOString().split('T')[0]}.pdf`);
+            toast.success("Downloaded");
+        } catch (error) { toast.error("Export failed"); }
     };
 
-    const handleToggleStatus = async (product) => {
-        setSubmitting(true);
+    const handleDownloadProductPdf = async (row) => {
         try {
-            const nextStatus = product.status === 'ACTIVE' ? 'DISCONTINUED' : 'ACTIVE';
-            await updateProduct(product.id, {
-                name: product.name,
-                category: product.category,
-                unitPrice: product.unitPrice,
-                bulkPrice: product.bulkPrice,
-                bulkQty: product.bulkQty,
-                unitQty: product.unitQty,
-                unitsPerBulk: product.unitsPerBulk,
-                status: nextStatus,
-            });
-            toast.success(nextStatus === 'ACTIVE' ? 'Product activated' : 'Product deactivated');
-            fetchProducts();
-        } catch (error) {
-            console.error(error);
-            toast.error('Status update failed');
-        } finally {
-            setSubmitting(false);
-        }
+            const { data } = await getProductDetailsPdf(row.id);
+            downloadBlob(data, `Product_${row.publicId || row.id}.pdf`);
+            toast.success("Product PDF downloaded");
+        } catch (error) { toast.error("Download failed"); }
     };
 
-    const columns = [
-        { id: 'id', label: 'ID', minWidth: 60 },
-        { id: 'name', label: 'Product Name', minWidth: 180 },
-        { id: 'category', label: 'Category', minWidth: 120 },
+    const formatCurrency = (val) => Number.isFinite(Number(val)) ? `₹${Number(val).toFixed(2)}` : '—';
+
+    const columns = useMemo(() => [
+        { id: 'publicId', label: 'ID', minWidth: 90, sortable: true },
+        { id: 'name', label: 'Product Name', minWidth: 180, sortable: true },
+        { id: 'category', label: 'Category', minWidth: 120, sortable: true },
+        { id: 'purchasePrice', label: 'Purchase', minWidth: 100, align: 'right', sortable: true, render: (val) => formatCurrency(val) },
+        { id: 'unitPrice', label: 'Unit Price', minWidth: 100, align: 'right', sortable: true, render: (val) => formatCurrency(val) },
+        { id: 'unitQty', label: 'Stock', minWidth: 100, align: 'right', sortable: true },
+        { id: 'reorderLevel', label: 'Reorder', minWidth: 100, align: 'right', sortable: true },
         {
-            id: 'purchasePrice',
-            label: 'Purchase Price',
-            minWidth: 100,
-            align: 'right',
-            render: (val) => formatCurrency(val)
+            id: 'activeToggle', label: 'Active', minWidth: 90,
+            render: (_, row) => <Switch checked={row.status === 'ACTIVE'} onChange={() => handleToggleStatus(row)} color="success" size="small" />
         },
-        { id: 'unitType', label: 'Unit Type', minWidth: 100 },
-        {
-            id: 'unitPrice',
-            label: 'Unit Price',
-            minWidth: 100,
-            align: 'right',
-            render: (val) => formatCurrency(val)
-        },
-        {
-            id: 'bulkPrice',
-            label: 'Bulk Price',
-            minWidth: 100,
-            align: 'right',
-            render: (val) => formatCurrency(val)
-        },
-        {
-            id: 'unitQty',
-            label: 'Unit Stock',
-            minWidth: 100,
-            align: 'right',
-            render: (val) => formatNumber(val)
-        },
-        {
-            id: 'bulkQty',
-            label: 'Bulk Stock',
-            minWidth: 100,
-            align: 'right',
-            render: (val) => formatNumber(val)
-        },
-        {
-            id: 'reorderLevel',
-            label: 'Reorder Level',
-            minWidth: 100,
-            align: 'right',
-            render: (val) => formatNumber(val)
-        },
-        {
-            id: 'activeToggle',
-            label: 'Active',
-            minWidth: 90,
-            render: (_val, row) => (
-                <Switch
-                    checked={row.status === 'ACTIVE'}
-                    onChange={() => handleToggleStatus(row)}
-                    disabled={submitting}
-                    color="success"
-                    size="small"
-                />
-            )
-        },
-        {
-            id: 'status',
-            label: 'Status',
-            minWidth: 100,
-            render: (val) => <StatusChip status={val} />
-        },
-        {
-            id: 'createdAt',
-            label: 'Created At',
-            minWidth: 150,
-            render: (val) => val ? new Date(val).toLocaleString() : '—'
-        },
-        {
-            id: 'updatedAt',
-            label: 'Updated At',
-            minWidth: 150,
-            render: (val) => val ? new Date(val).toLocaleString() : '—'
-        },
-    ];
+        { id: 'status', label: 'Status', minWidth: 100, sortable: true, render: (val) => <StatusChip status={val} /> },
+    ], []);
 
     return (
-        <AnimatedContainer delay={0.1}>
+        <AnimatedContainer>
             <PageHeader
-                title="Products"
-                subtitle="Manage your product catalog and inventory"
+                title="Products" subtitle="Manage catalog and inventory"
                 breadcrumbs={[{ label: 'Products', path: '/products' }]}
                 actions={
-                    <Box display="flex" gap={1}>
-                        <input
-                            type="file"
-                            accept=".csv"
-                            style={{ display: 'none' }}
-                            id="csv-upload-input"
-                            onChange={handleImportCsv}
-                        />
-                        <label htmlFor="csv-upload-input">
-                            <Button
-                                variant="outlined"
-                                component="span"
-                                startIcon={importing ? <CircularProgress size={20} /> : <FileUpload />}
-                                disabled={importing}
-                            >
-                                {importing ? 'Importing...' : 'Import CSV'}
-                            </Button>
+                    <Stack direction="row" spacing={1}>
+                        <input type="file" accept=".csv" style={{ display: 'none' }} id="csv-upload" onChange={handleImportCsv} />
+                        <label htmlFor="csv-upload">
+                            <Button variant="outlined" component="span" startIcon={importMutation.isLoading ? <CircularProgress size={20} /> : <FileUpload />} disabled={importMutation.isLoading}>Import</Button>
                         </label>
-                        <Button
-                            variant="contained"
-                            startIcon={<Add />}
-                            onClick={() => handleOpenDialog()}
-                        >
-                            Add Product
-                        </Button>
-                    </Box>
+                        <Button variant="outlined" startIcon={<PictureAsPdf />} onClick={handleExportPDF}>Report</Button>
+                        <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenDialog()}>Add Product</Button>
+                    </Stack>
                 }
             />
 
-            <DashboardCard title="Product List" subtitle="Search, filter, and manage your inventory items">
-                {/* Filter Bar */}
-                <Box mb={3} display="flex" gap={2} flexWrap="wrap" alignItems="center">
-                    <TextField
-                        size="small"
-                        label="Filter by Category"
-                        placeholder="e.g. Rice, Grains"
-                        value={filterCategory}
-                        onChange={(e) => setFilterCategory(e.target.value)}
-                        sx={{ width: 200 }}
-                    />
-                    <TextField
-                        size="small"
-                        label="Search by Product ID"
-                        type="number"
-                        placeholder="Enter ID"
-                        value={searchId}
-                        onChange={(e) => setSearchId(e.target.value)}
-                        sx={{ width: 180 }}
-                    />
-
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                checked={showArchived}
-                                onChange={(e) => setShowArchived(e.target.checked)}
-                                color="warning"
-                            />
-                        }
-                        label={showArchived ? "Viewing Archived" : "View Archived"}
-                    />
-
-                    {(filterCategory || searchId || showArchived) && (
-                        <Button
-                            color="inherit"
-                            onClick={() => { setFilterCategory(''); setSearchId(''); setShowArchived(false); }}
-                        >
-                            Clear Filters
-                        </Button>
-                    )}
-                </Box>
+            <DashboardCard title="Inventory Management">
+                <Grid container spacing={2} sx={{ mb: 3 }} alignItems="center">
+                    <Grid item xs={12} sm={3}>
+                        <TextField
+                            fullWidth size="small" label="Search" placeholder="Name, ID"
+                            value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                            InputProps={{ startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={2}>
+                        <TextField
+                            fullWidth size="small" label="Category" placeholder="Category"
+                            value={filterCategory} onChange={(e) => { setFilterCategory(e.target.value); setPage(0); }}
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={2}>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                            <Switch checked={showArchived} onChange={(e) => { setShowArchived(e.target.checked); setPage(0); }} color="warning" size="small" />
+                            <Typography variant="body2">{showArchived ? "Archived" : "Active Only"}</Typography>
+                        </Stack>
+                    </Grid>
+                    <Grid item xs={12} sm={2}>
+                        <Button startIcon={<Clear />} color="inherit" disabled={!search && !filterCategory && !showArchived} onClick={() => { setSearch(''); setFilterCategory(''); setShowArchived(false); setPage(0); }}>Clear</Button>
+                    </Grid>
+                </Grid>
 
                 <DataTable
-                    columns={columns}
-                    data={products}
-                    searchKey="name"
-                    loading={loading}
-                    emptyTitle="No products found"
-                    emptyDescription="Start by adding your first product to the catalog."
-                    emptyAction={
-                        <Button
-                            variant="contained"
-                            startIcon={<Add />}
-                            onClick={() => handleOpenDialog()}
-                        >
-                            Add First Product
-                        </Button>
-                    }
+                    serverSide columns={columns} data={products} loading={isLoading}
+                    totalCount={totalCount} page={page} rowsPerPage={rowsPerPage}
+                    onPageChange={setPage} onRowsPerPageChange={setRowsPerPage}
+                    orderBy={orderBy} orderDirection={orderDirection} onSortChange={handleSort}
                     actions={(row) => (
-                        <>
-                            <Tooltip title="Edit">
-                                <IconButton size="small" onClick={() => handleOpenDialog(row)}>
-                                    <Edit fontSize="small" />
+                        <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="View"><IconButton size="small" color="info" onClick={() => { setSelectedProduct(row); setDetailsOpen(true); }}><Visibility fontSize="small" /></IconButton></Tooltip>
+                            <Tooltip title="Print Data Sheet">
+                                <IconButton size="small" color="secondary" onClick={() => handleDownloadProductPdf(row)}>
+                                    <PictureAsPdf fontSize="small" />
                                 </IconButton>
                             </Tooltip>
-                            <Tooltip title="Delete">
-                                <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => handleOpenDeleteDialog(row.id)}
-                                >
-                                    <Delete fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </>
+                            <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpenDialog(row)}><Edit fontSize="small" /></IconButton></Tooltip>
+                            <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => { setDeleteId(row.id); setDeleteDialogOpen(true); }}><Delete fontSize="small" /></IconButton></Tooltip>
+                        </Stack>
                     )}
                 />
             </DashboardCard>
 
-            {/* Create/Edit Dialog */}
             <FormDialog
-                open={dialogOpen}
-                onClose={handleCloseDialog}
-                onSubmit={handleSubmit}
-                title={editId ? 'Edit Product' : 'Add New Product'}
-                subtitle={editId ? 'Update product information' : 'Enter product details'}
-                loading={submitting}
-                maxWidth="md"
+                open={dialogOpen} onClose={handleCloseDialog} onSubmit={handleSubmit}
+                title={editId ? 'Edit Product' : 'Add Product'} loading={createMutation.isLoading || updateMutation.isLoading} maxWidth="md"
             >
                 <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            label="Product Name"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            required
-                            disabled={submitting}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            fullWidth
-                            label="Category"
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                            required
-                            disabled={submitting}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Unit Price (₹)"
-                            value={formData.unitPrice}
-                            onChange={(e) => setFormData({ ...formData, unitPrice: parseFloat(e.target.value) })}
-                            required
-                            disabled={submitting}
-                            inputProps={{ min: 0, step: 0.01 }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Bulk Price (₹)"
-                            value={formData.bulkPrice}
-                            onChange={(e) => setFormData({ ...formData, bulkPrice: parseFloat(e.target.value) })}
-                            required
-                            disabled={submitting}
-                            inputProps={{ min: 0, step: 0.01 }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Purchase Price (₹)"
-                            value={formData.purchasePrice}
-                            onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) })}
-                            required
-                            disabled={submitting}
-                            inputProps={{ min: 0, step: 0.01 }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Unit Quantity"
-                            value={formData.unitQty}
-                            onChange={(e) => setFormData({ ...formData, unitQty: parseInt(e.target.value) })}
-                            required
-                            disabled={submitting}
-                            inputProps={{ min: 0 }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Bulk Quantity"
-                            value={formData.bulkQty}
-                            onChange={(e) => setFormData({ ...formData, bulkQty: parseFloat(e.target.value) })}
-                            required
-                            disabled={submitting}
-                            inputProps={{ min: 0, step: 0.01 }}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Units Per Bulk"
-                            value={formData.unitsPerBulk}
-                            onChange={(e) => setFormData({ ...formData, unitsPerBulk: parseInt(e.target.value) })}
-                            required
-                            disabled={submitting}
-                            inputProps={{ min: 1 }}
-                            helperText="How many units in one bulk item"
-                        />
-                    </Grid>
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            select
-                            label="Status"
-                            value={formData.status}
-                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                            required
-                            disabled={submitting}
-                        >
-                            <MenuItem value="ACTIVE">Active</MenuItem>
-                            <MenuItem value="DISCONTINUED">Discontinued</MenuItem>
-                        </TextField>
-                    </Grid>
+                    <Grid item xs={12} sm={6}><TextField fullWidth label="Product Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required /></Grid>
+                    <Grid item xs={12} sm={6}><TextField fullWidth label="Category" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} required /></Grid>
+                    <Grid item xs={12} sm={4}><TextField fullWidth type="number" label="Unit Price (₹)" value={formData.unitPrice} onChange={(e) => setFormData({ ...formData, unitPrice: parseFloat(e.target.value) })} required /></Grid>
+                    <Grid item xs={12} sm={4}><TextField fullWidth type="number" label="Bulk Price (₹)" value={formData.bulkPrice} onChange={(e) => setFormData({ ...formData, bulkPrice: parseFloat(e.target.value) })} required /></Grid>
+                    <Grid item xs={12} sm={4}><TextField fullWidth type="number" label="Purchase Price (₹)" value={formData.purchasePrice} onChange={(e) => setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) })} required /></Grid>
+                    <Grid item xs={12} sm={4}><TextField fullWidth type="number" label="Unit Stock" value={formData.unitQty} onChange={(e) => setFormData({ ...formData, unitQty: parseInt(e.target.value) })} required /></Grid>
+                    <Grid item xs={12} sm={4}><TextField fullWidth type="number" label="Bulk Stock" value={formData.bulkQty} onChange={(e) => setFormData({ ...formData, bulkQty: parseFloat(e.target.value) })} required /></Grid>
+                    <Grid item xs={12} sm={4}><TextField fullWidth type="number" label="Units Per Bulk" value={formData.unitsPerBulk} onChange={(e) => setFormData({ ...formData, unitsPerBulk: parseInt(e.target.value) })} required /></Grid>
+                    <Grid item xs={12} sm={4}><TextField fullWidth type="number" label="Reorder Level" value={formData.reorderLevel} onChange={(e) => setFormData({ ...formData, reorderLevel: parseInt(e.target.value) })} required /></Grid>
+                    <Grid item xs={12} sm={8}><TextField select fullWidth label="Status" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} required><MenuItem value="ACTIVE">Active</MenuItem><MenuItem value="DISCONTINUED">Discontinued</MenuItem></TextField></Grid>
                 </Grid>
             </FormDialog>
 
-            {/* Delete Confirmation Dialog */}
             <ConfirmDialog
-                open={deleteDialogOpen}
-                onClose={() => setDeleteDialogOpen(false)}
-                onConfirm={handleDelete}
-                title="Delete Product"
-                message="Are you sure you want to delete this product? This action cannot be undone."
-                confirmText="Delete"
-                severity="error"
-                loading={submitting}
+                open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={() => deleteMutation.mutate(deleteId)}
+                title="Delete Product" message="Archive this product? (Use deactivate instead if you want to keep records)." loading={deleteMutation.isLoading} severity="error"
             />
+
+            <GenericDetailsDialog open={detailsOpen} onClose={() => setDetailsOpen(false)} data={selectedProduct} title="Product Details" />
         </AnimatedContainer>
     );
 }
+
